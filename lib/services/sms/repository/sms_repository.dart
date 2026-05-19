@@ -58,7 +58,12 @@ class SmsRepository {
         }
 
         final address = normalizeAddress(rawAddress);
-        final timestamp = DateTime.fromMillisecondsSinceEpoch(date);
+        // Robust handling of epoch times in seconds vs milliseconds
+        int dateVal = date;
+        if (dateVal < 1000000000000) {
+          dateVal *= 1000;
+        }
+        final timestamp = DateTime.fromMillisecondsSinceEpoch(dateVal, isUtc: true);
         final isMe = type == 2;
         final isRead = read == 1;
 
@@ -116,10 +121,10 @@ class SmsRepository {
 
   /// Delete OTP messages older than 30 minutes from both local Isar and native provider
   Future<void> deleteExpiredOtps() async {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     final cutoffTime = now.subtract(const Duration(minutes: 30));
 
-    // 1. Query Isar for all messages older than cutoffTime
+    // 1. Query Isar for all messages older than cutoffTime (comparing in UTC)
     final messages = await isar.messageModels
         .filter()
         .timestampLessThan(cutoffTime)
@@ -291,7 +296,7 @@ class SmsRepository {
       ..nativeMessageId = "temp_${DateTime.now().millisecondsSinceEpoch}"
       ..threadAddress = normalized
       ..body = body
-      ..timestamp = DateTime.now()
+      ..timestamp = DateTime.now().toUtc()
       ..isMe = true
       ..isRead = true;
 

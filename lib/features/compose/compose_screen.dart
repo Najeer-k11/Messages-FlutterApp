@@ -94,7 +94,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
         ..address = normalizedAddress
         ..senderName = resolvedName.isNotEmpty ? resolvedName : normalizedAddress
         ..lastMessage = ''
-        ..timestamp = DateTime.now()
+        ..timestamp = DateTime.now().toUtc()
         ..unreadCount = 0;
 
       await isar.writeTxn(() async {

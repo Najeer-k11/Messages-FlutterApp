@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,14 +12,15 @@ class ThreadCard extends StatelessWidget {
   const ThreadCard({super.key, required this.thread, required this.onTap});
 
   String _formatTime(DateTime time) {
+    final localTime = time.toLocal();
     final now = DateTime.now();
-    final diff = now.difference(time);
+    final diff = now.difference(localTime);
     if (diff.inDays == 0) {
-      return "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+      return "${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}";
     } else if (diff.inDays == 1) {
       return "Yesterday";
     } else {
-      return "${time.day}/${time.month}";
+      return "${localTime.day}/${localTime.month}";
     }
   }
 
