@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:msgs/features/conversation/widgets/message_bubble.dart';
 import 'package:msgs/features/conversation/widgets/composer.dart';
 import 'package:msgs/core/motion/motion_engine.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ConversationScreen extends StatefulWidget {
   final ThreadModel thread;
@@ -17,7 +18,6 @@ class ConversationScreen extends StatefulWidget {
 }
 
 class _ConversationScreenState extends State<ConversationScreen> {
-
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -26,9 +26,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
     // Mark thread as read as soon as conversation is opened
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SmsRepository>().markThreadAsRead(
-            widget.thread.address,
-            widget.thread.nativeThreadId,
-          );
+        widget.thread.address,
+        widget.thread.nativeThreadId,
+      );
     });
   }
 
@@ -41,7 +41,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Future<void> _sendMessage(String text) async {
     try {
       await context.read<SmsRepository>().sendSms(widget.thread.address, text);
-      
+
       // Scroll to bottom
       _scrollController.animateTo(
         0,
@@ -50,9 +50,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send SMS: \$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to send SMS: \$e')));
       }
     }
   }
@@ -72,7 +72,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 radius: 18,
                 backgroundColor: theme.colorScheme.primaryContainer,
                 child: Text(
-                  widget.thread.senderName.isNotEmpty ? widget.thread.senderName.substring(0, 1).toUpperCase() : '?',
+                  widget.thread.senderName.isNotEmpty
+                      ? widget.thread.senderName.substring(0, 1).toUpperCase()
+                      : '?',
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: theme.colorScheme.onPrimaryContainer,
                   ),
@@ -99,8 +101,20 @@ class _ConversationScreenState extends State<ConversationScreen> {
           ],
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.call), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.call),
+            onPressed: () async {
+              await launchUrl(Uri.parse('tel:${widget.thread.address}'));
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('More options coming soon!')),
+              );
+            },
+          ),
         ],
       ),
       body: Stack(
@@ -119,12 +133,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
               ),
             ),
           ),
-          
+
           Column(
             children: [
               Expanded(
                 child: StreamBuilder<List<MessageModel>>(
-                  stream: context.read<SmsRepository>().watchMessagesForThread(widget.thread.address),
+                  stream: context.read<SmsRepository>().watchMessagesForThread(
+                    widget.thread.address,
+                  ),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -132,9 +148,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     if (snapshot.hasError) {
                       return Center(child: Text('Error: \${snapshot.error}'));
                     }
-                    
+
                     final messagesList = snapshot.data ?? [];
-                    
+
                     return ListView.builder(
                       controller: _scrollController,
                       reverse: true, // Latest messages at the bottom
@@ -142,19 +158,23 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       itemCount: messagesList.length,
                       itemBuilder: (context, index) {
                         final message = messagesList[index];
-                        
+
                         // Logic for grouping bubbles
                         bool isFirstInGroup = true;
                         bool isLastInGroup = true;
-                        
+
                         if (index > 0) {
-                          final prevMessage = messagesList[index - 1]; // "next" message visually since reversed
+                          final prevMessage =
+                              messagesList[index -
+                                  1]; // "next" message visually since reversed
                           if (prevMessage.isMe == message.isMe) {
                             isLastInGroup = false;
                           }
                         }
                         if (index < messagesList.length - 1) {
-                          final nextMessage = messagesList[index + 1]; // "previous" message visually
+                          final nextMessage =
+                              messagesList[index +
+                                  1]; // "previous" message visually
                           if (nextMessage.isMe == message.isMe) {
                             isFirstInGroup = false;
                           }
@@ -168,11 +188,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
                           isFirstInGroup: isFirstInGroup,
                           isLastInGroup: isLastInGroup,
                         );
-                        
+
                         return bubble;
                       },
                     );
-                  }
+                  },
                 ),
               ),
               Composer(onSend: _sendMessage),

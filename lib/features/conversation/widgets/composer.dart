@@ -59,8 +59,15 @@ class _ComposerState extends State<Composer> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     IconButton(
-                      icon: Icon(Icons.add_circle, color: theme.colorScheme.primary),
-                      onPressed: () {},
+                      icon: Icon(
+                        Icons.add_circle,
+                        color: theme.colorScheme.primary,
+                      ),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('File sharing coming soon!')),
+                        );
+                      },
                     ),
                     Expanded(
                       child: TextField(
@@ -70,16 +77,29 @@ class _ComposerState extends State<Composer> {
                         textInputAction: TextInputAction.newline,
                         decoration: InputDecoration(
                           hintText: 'Type a message',
-                          hintStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                          hintStyle: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 14.0),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14.0,
+                          ),
                         ),
                       ),
                     ),
                     if (!_hasText)
                       IconButton(
-                        icon: Icon(Icons.camera_alt, color: theme.colorScheme.onSurfaceVariant),
-                        onPressed: () {},
+                        icon: Icon(
+                          Icons.camera_alt,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Camera feature coming soon!'),
+                            ),
+                          );
+                        },
                       ),
                   ],
                 ),
@@ -92,15 +112,21 @@ class _ComposerState extends State<Composer> {
               height: 48,
               width: 48,
               decoration: BoxDecoration(
-                color: _hasText ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHigh,
+                color: _hasText
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.surfaceContainerHigh,
                 shape: BoxShape.circle,
               ),
               child: IconButton(
                 icon: Icon(
                   _hasText ? Icons.send : Icons.mic,
-                  color: _hasText ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+                  color: _hasText
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
-                onPressed: _hasText ? _handleSend : null, // Mic not implemented yet
+                onPressed: _hasText
+                    ? _handleSend
+                    : null, // Mic not implemented yet
               ),
             ),
           ],

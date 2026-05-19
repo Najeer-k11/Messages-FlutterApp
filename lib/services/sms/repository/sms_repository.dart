@@ -63,7 +63,10 @@ class SmsRepository {
         if (dateVal < 1000000000000) {
           dateVal *= 1000;
         }
-        final timestamp = DateTime.fromMillisecondsSinceEpoch(dateVal, isUtc: true);
+        final timestamp = DateTime.fromMillisecondsSinceEpoch(
+          dateVal,
+          isUtc: true,
+        );
         final isMe = type == 2;
         final isRead = read == 1;
 
@@ -119,10 +122,25 @@ class SmsRepository {
     }
   }
 
-  /// Delete OTP messages older than 30 minutes from both local Isar and native provider
+  /// Delete OTP messages older than 24 hours from both local Isar and native provider
   Future<void> deleteExpiredOtps() async {
-    final now = DateTime.now().toUtc();
-    final cutoffTime = now.subtract(const Duration(minutes: 30));
+    final latestMsg = await isar.messageModels
+        .where()
+        .sortByTimestampDesc()
+        .findFirst();
+
+    DateTime referenceTime = DateTime.now();
+    if (latestMsg != null) {
+      final diff = referenceTime.difference(latestMsg.timestamp).abs();
+      // If the latest message timestamp is within 24 hours of device time, trust it
+      if (diff.inHours < 24) {
+        referenceTime = latestMsg.timestamp;
+      }
+    }
+
+    final cutoffTime = referenceTime
+        .subtract(const Duration(hours: 24))
+        .toUtc();
 
     // 1. Query Isar for all messages older than cutoffTime (comparing in UTC)
     final messages = await isar.messageModels
@@ -132,7 +150,8 @@ class SmsRepository {
 
     final List<MessageModel> otpsToDelete = [];
     for (final msg in messages) {
-      if (MessageClassifier.classify(msg.body, msg.threadAddress) == MessageCategory.otp) {
+      if (MessageClassifier.classify(msg.body, msg.threadAddress) ==
+          MessageCategory.otp) {
         otpsToDelete.add(msg);
       }
     }
@@ -143,7 +162,9 @@ class SmsRepository {
     for (final msg in otpsToDelete) {
       if (!msg.nativeMessageId.startsWith('temp_')) {
         try {
-          await _channel.invokeMethod('deleteSms', {'messageId': msg.nativeMessageId});
+          await _channel.invokeMethod('deleteSms', {
+            'messageId': msg.nativeMessageId,
+          });
         } catch (_) {}
       }
     }
@@ -154,7 +175,9 @@ class SmsRepository {
       await isar.messageModels.deleteAll(idsToDelete);
 
       // Clean up affected threads
-      final affectedAddresses = otpsToDelete.map((m) => m.threadAddress).toSet();
+      final affectedAddresses = otpsToDelete
+          .map((m) => m.threadAddress)
+          .toSet();
       for (final address in affectedAddresses) {
         final thread = await isar.threadModels
             .filter()
@@ -222,7 +245,9 @@ class SmsRepository {
     // 1. Delete natively (best-effort — only works if we are default SMS app)
     try {
       if (nativeThreadId.isNotEmpty) {
-        await _channel.invokeMethod('deleteThread', {'threadId': nativeThreadId});
+        await _channel.invokeMethod('deleteThread', {
+          'threadId': nativeThreadId,
+        });
       }
     } catch (_) {}
 
@@ -232,10 +257,7 @@ class SmsRepository {
           .filter()
           .threadAddressEqualTo(normalized)
           .deleteAll();
-      await isar.threadModels
-          .filter()
-          .addressEqualTo(normalized)
-          .deleteAll();
+      await isar.threadModels.filter().addressEqualTo(normalized).deleteAll();
     });
   }
 
@@ -245,7 +267,9 @@ class SmsRepository {
     // 1. Mark natively (best-effort)
     try {
       if (nativeThreadId.isNotEmpty) {
-        await _channel.invokeMethod('markThreadAsRead', {'threadId': nativeThreadId});
+        await _channel.invokeMethod('markThreadAsRead', {
+          'threadId': nativeThreadId,
+        });
       }
     } catch (_) {}
 
@@ -315,7 +339,9 @@ class SmsRepository {
           for (final contact in contacts) {
             final name = contact['name'] ?? '';
             final number = contact['number'] ?? '';
-            if (name.isNotEmpty && number.isNotEmpty && normalizeAddress(number) == normalized) {
+            if (name.isNotEmpty &&
+                number.isNotEmpty &&
+                normalizeAddress(number) == normalized) {
               senderName = name;
               break;
             }
