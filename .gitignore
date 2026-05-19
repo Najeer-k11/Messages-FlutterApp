@@ -30,7 +30,7 @@ migrate_working_dir/
 /build/
 /coverage/
 .idea/
-
+.jks
 # Symbolication related
 app.*.symbols
 
