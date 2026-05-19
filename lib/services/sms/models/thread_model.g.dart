@@ -17,11 +17,7 @@ const ThreadModelSchema = CollectionSchema(
   name: r'ThreadModel',
   id: -1364098944990894277,
   properties: {
-    r'address': PropertySchema(
-      id: 0,
-      name: r'address',
-      type: IsarType.string,
-    ),
+    r'address': PropertySchema(id: 0, name: r'address', type: IsarType.string),
     r'lastMessage': PropertySchema(
       id: 1,
       name: r'lastMessage',
@@ -46,8 +42,9 @@ const ThreadModelSchema = CollectionSchema(
       id: 5,
       name: r'unreadCount',
       type: IsarType.long,
-    )
+    ),
   },
+
   estimateSize: _threadModelEstimateSize,
   serialize: _threadModelSerialize,
   deserialize: _threadModelDeserialize,
@@ -64,16 +61,17 @@ const ThreadModelSchema = CollectionSchema(
           name: r'address',
           type: IndexType.hash,
           caseSensitive: true,
-        )
+        ),
       ],
-    )
+    ),
   },
   links: {},
   embeddedSchemas: {},
+
   getId: _threadModelGetId,
   getLinks: _threadModelGetLinks,
   attach: _threadModelAttach,
-  version: '3.1.0+1',
+  version: '3.3.2',
 );
 
 int _threadModelEstimateSize(
@@ -153,7 +151,10 @@ List<IsarLinkBase<dynamic>> _threadModelGetLinks(ThreadModel object) {
 }
 
 void _threadModelAttach(
-    IsarCollection<dynamic> col, Id id, ThreadModel object) {
+  IsarCollection<dynamic> col,
+  Id id,
+  ThreadModel object,
+) {
   object.id = id;
 }
 
@@ -206,8 +207,10 @@ extension ThreadModelByIndex on IsarCollection<ThreadModel> {
     return putAllByIndex(r'address', objects);
   }
 
-  List<Id> putAllByAddressSync(List<ThreadModel> objects,
-      {bool saveLinks = true}) {
+  List<Id> putAllByAddressSync(
+    List<ThreadModel> objects, {
+    bool saveLinks = true,
+  }) {
     return putAllByIndexSync(r'address', objects, saveLinks: saveLinks);
   }
 }
@@ -225,15 +228,13 @@ extension ThreadModelQueryWhere
     on QueryBuilder<ThreadModel, ThreadModel, QWhereClause> {
   QueryBuilder<ThreadModel, ThreadModel, QAfterWhereClause> idEqualTo(Id id) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IdWhereClause.between(
-        lower: id,
-        upper: id,
-      ));
+      return query.addWhereClause(IdWhereClause.between(lower: id, upper: id));
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterWhereClause> idNotEqualTo(
-      Id id) {
+    Id id,
+  ) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
@@ -255,8 +256,10 @@ extension ThreadModelQueryWhere
     });
   }
 
-  QueryBuilder<ThreadModel, ThreadModel, QAfterWhereClause> idGreaterThan(Id id,
-      {bool include = false}) {
+  QueryBuilder<ThreadModel, ThreadModel, QAfterWhereClause> idGreaterThan(
+    Id id, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         IdWhereClause.greaterThan(lower: id, includeLower: include),
@@ -264,8 +267,10 @@ extension ThreadModelQueryWhere
     });
   }
 
-  QueryBuilder<ThreadModel, ThreadModel, QAfterWhereClause> idLessThan(Id id,
-      {bool include = false}) {
+  QueryBuilder<ThreadModel, ThreadModel, QAfterWhereClause> idLessThan(
+    Id id, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         IdWhereClause.lessThan(upper: id, includeUpper: include),
@@ -280,56 +285,67 @@ extension ThreadModelQueryWhere
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IdWhereClause.between(
-        lower: lowerId,
-        includeLower: includeLower,
-        upper: upperId,
-        includeUpper: includeUpper,
-      ));
+      return query.addWhereClause(
+        IdWhereClause.between(
+          lower: lowerId,
+          includeLower: includeLower,
+          upper: upperId,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterWhereClause> addressEqualTo(
-      String address) {
+    String address,
+  ) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.equalTo(
-        indexName: r'address',
-        value: [address],
-      ));
+      return query.addWhereClause(
+        IndexWhereClause.equalTo(indexName: r'address', value: [address]),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterWhereClause> addressNotEqualTo(
-      String address) {
+    String address,
+  ) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'address',
-              lower: [],
-              upper: [address],
-              includeUpper: false,
-            ))
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'address',
-              lower: [address],
-              includeLower: false,
-              upper: [],
-            ));
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'address',
+                lower: [],
+                upper: [address],
+                includeUpper: false,
+              ),
+            )
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'address',
+                lower: [address],
+                includeLower: false,
+                upper: [],
+              ),
+            );
       } else {
         return query
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'address',
-              lower: [address],
-              includeLower: false,
-              upper: [],
-            ))
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'address',
-              lower: [],
-              upper: [address],
-              includeUpper: false,
-            ));
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'address',
+                lower: [address],
+                includeLower: false,
+                upper: [],
+              ),
+            )
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'address',
+                lower: [],
+                upper: [address],
+                includeUpper: false,
+              ),
+            );
       }
     });
   }
@@ -342,27 +358,31 @@ extension ThreadModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'address',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'address',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      addressGreaterThan(
+  addressGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'address',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'address',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
@@ -372,12 +392,14 @@ extension ThreadModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'address',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'address',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
@@ -389,28 +411,29 @@ extension ThreadModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'address',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'address',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      addressStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  addressStartsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'address',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'address',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
@@ -419,65 +442,71 @@ extension ThreadModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'address',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'address',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition> addressContains(
-      String value,
-      {bool caseSensitive = true}) {
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'address',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'address',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition> addressMatches(
-      String pattern,
-      {bool caseSensitive = true}) {
+    String pattern, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'address',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'address',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      addressIsEmpty() {
+  addressIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'address',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'address', value: ''),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      addressIsNotEmpty() {
+  addressIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'address',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'address', value: ''),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition> idEqualTo(
-      Id value) {
+    Id value,
+  ) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'id', value: value),
+      );
     });
   }
 
@@ -486,11 +515,13 @@ extension ThreadModelQueryFilter
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'id',
+          value: value,
+        ),
+      );
     });
   }
 
@@ -499,11 +530,13 @@ extension ThreadModelQueryFilter
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'id',
+          value: value,
+        ),
+      );
     });
   }
 
@@ -514,64 +547,69 @@ extension ThreadModelQueryFilter
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'id',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'id',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      lastMessageEqualTo(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  lastMessageEqualTo(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'lastMessage',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'lastMessage',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      lastMessageGreaterThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'lastMessage',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      lastMessageLessThan(
+  lastMessageGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'lastMessage',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'lastMessage',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      lastMessageBetween(
+  lastMessageLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'lastMessage',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
+  lastMessageBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -579,135 +617,140 @@ extension ThreadModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'lastMessage',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'lastMessage',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      lastMessageStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  lastMessageStartsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'lastMessage',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'lastMessage',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      lastMessageEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  lastMessageEndsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'lastMessage',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'lastMessage',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      lastMessageContains(String value, {bool caseSensitive = true}) {
+  lastMessageContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'lastMessage',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'lastMessage',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      lastMessageMatches(String pattern, {bool caseSensitive = true}) {
+  lastMessageMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'lastMessage',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'lastMessage',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      lastMessageIsEmpty() {
+  lastMessageIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'lastMessage',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'lastMessage', value: ''),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      lastMessageIsNotEmpty() {
+  lastMessageIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'lastMessage',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'lastMessage', value: ''),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      nativeThreadIdEqualTo(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  nativeThreadIdEqualTo(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'nativeThreadId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'nativeThreadId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      nativeThreadIdGreaterThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'nativeThreadId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      nativeThreadIdLessThan(
+  nativeThreadIdGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'nativeThreadId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'nativeThreadId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      nativeThreadIdBetween(
+  nativeThreadIdLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'nativeThreadId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
+  nativeThreadIdBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -715,135 +758,140 @@ extension ThreadModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'nativeThreadId',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'nativeThreadId',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      nativeThreadIdStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  nativeThreadIdStartsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'nativeThreadId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'nativeThreadId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      nativeThreadIdEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  nativeThreadIdEndsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'nativeThreadId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'nativeThreadId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      nativeThreadIdContains(String value, {bool caseSensitive = true}) {
+  nativeThreadIdContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'nativeThreadId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'nativeThreadId',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      nativeThreadIdMatches(String pattern, {bool caseSensitive = true}) {
+  nativeThreadIdMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'nativeThreadId',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'nativeThreadId',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      nativeThreadIdIsEmpty() {
+  nativeThreadIdIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'nativeThreadId',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'nativeThreadId', value: ''),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      nativeThreadIdIsNotEmpty() {
+  nativeThreadIdIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'nativeThreadId',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'nativeThreadId', value: ''),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      senderNameEqualTo(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  senderNameEqualTo(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'senderName',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'senderName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      senderNameGreaterThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'senderName',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      senderNameLessThan(
+  senderNameGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'senderName',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'senderName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      senderNameBetween(
+  senderNameLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'senderName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
+  senderNameBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -851,196 +899,196 @@ extension ThreadModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'senderName',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'senderName',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      senderNameStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  senderNameStartsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'senderName',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'senderName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      senderNameEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  senderNameEndsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'senderName',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'senderName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      senderNameContains(String value, {bool caseSensitive = true}) {
+  senderNameContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'senderName',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'senderName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      senderNameMatches(String pattern, {bool caseSensitive = true}) {
+  senderNameMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'senderName',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'senderName',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      senderNameIsEmpty() {
+  senderNameIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'senderName',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'senderName', value: ''),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      senderNameIsNotEmpty() {
+  senderNameIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'senderName',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'senderName', value: ''),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      timestampEqualTo(DateTime value) {
+  timestampEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'timestamp',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'timestamp', value: value),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      timestampGreaterThan(
-    DateTime value, {
-    bool include = false,
-  }) {
+  timestampGreaterThan(DateTime value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'timestamp',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'timestamp',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      timestampLessThan(
-    DateTime value, {
-    bool include = false,
-  }) {
+  timestampLessThan(DateTime value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'timestamp',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'timestamp',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      timestampBetween(
+  timestampBetween(
     DateTime lower,
     DateTime upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'timestamp',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'timestamp',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      unreadCountEqualTo(int value) {
+  unreadCountEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'unreadCount',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'unreadCount', value: value),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      unreadCountGreaterThan(
-    int value, {
-    bool include = false,
-  }) {
+  unreadCountGreaterThan(int value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'unreadCount',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'unreadCount',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      unreadCountLessThan(
-    int value, {
-    bool include = false,
-  }) {
+  unreadCountLessThan(int value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'unreadCount',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'unreadCount',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
-      unreadCountBetween(
+  unreadCountBetween(
     int lower,
     int upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'unreadCount',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'unreadCount',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 }
@@ -1084,7 +1132,7 @@ extension ThreadModelQuerySortBy
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterSortBy>
-      sortByNativeThreadIdDesc() {
+  sortByNativeThreadIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'nativeThreadId', Sort.desc);
     });
@@ -1172,7 +1220,7 @@ extension ThreadModelQuerySortThenBy
   }
 
   QueryBuilder<ThreadModel, ThreadModel, QAfterSortBy>
-      thenByNativeThreadIdDesc() {
+  thenByNativeThreadIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'nativeThreadId', Sort.desc);
     });
@@ -1217,30 +1265,36 @@ extension ThreadModelQuerySortThenBy
 
 extension ThreadModelQueryWhereDistinct
     on QueryBuilder<ThreadModel, ThreadModel, QDistinct> {
-  QueryBuilder<ThreadModel, ThreadModel, QDistinct> distinctByAddress(
-      {bool caseSensitive = true}) {
+  QueryBuilder<ThreadModel, ThreadModel, QDistinct> distinctByAddress({
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'address', caseSensitive: caseSensitive);
     });
   }
 
-  QueryBuilder<ThreadModel, ThreadModel, QDistinct> distinctByLastMessage(
-      {bool caseSensitive = true}) {
+  QueryBuilder<ThreadModel, ThreadModel, QDistinct> distinctByLastMessage({
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'lastMessage', caseSensitive: caseSensitive);
     });
   }
 
-  QueryBuilder<ThreadModel, ThreadModel, QDistinct> distinctByNativeThreadId(
-      {bool caseSensitive = true}) {
+  QueryBuilder<ThreadModel, ThreadModel, QDistinct> distinctByNativeThreadId({
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'nativeThreadId',
-          caseSensitive: caseSensitive);
+      return query.addDistinctBy(
+        r'nativeThreadId',
+        caseSensitive: caseSensitive,
+      );
     });
   }
 
-  QueryBuilder<ThreadModel, ThreadModel, QDistinct> distinctBySenderName(
-      {bool caseSensitive = true}) {
+  QueryBuilder<ThreadModel, ThreadModel, QDistinct> distinctBySenderName({
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'senderName', caseSensitive: caseSensitive);
     });

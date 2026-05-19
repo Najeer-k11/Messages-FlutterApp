@@ -4,8 +4,7 @@ import 'package:msgs/features/inbox/bloc/inbox_event.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_notifier.dart';
 import 'features/permissions/permission_screen.dart';
-
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:msgs/services/sms/repository/sms_repository.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';
 import 'package:msgs/features/conversation/conversation_screen.dart';
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class ComposeScreen extends StatefulWidget {
