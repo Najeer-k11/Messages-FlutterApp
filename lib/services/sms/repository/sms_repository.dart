@@ -2,7 +2,6 @@ import 'package:flutter/services.dart';
 import 'package:isar_community/isar.dart';
 import 'package:msgs/services/sms/models/message_model.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';
-import 'package:msgs/services/sms/categorization/message_classifier.dart';
 
 class SmsRepository {
   static const MethodChannel _channel = MethodChannel('com.msgs.ndevmsgs/sms');
@@ -23,7 +22,7 @@ class SmsRepository {
   Future<void> syncSms() async {
     try {
       // Clean up expired OTPs (from local Isar and native provider) before syncing
-      await deleteExpiredOtps();
+      // await deleteExpiredOtps();
 
       final List<dynamic> result = await _channel.invokeMethod('getAllSms');
 
@@ -123,84 +122,84 @@ class SmsRepository {
   }
 
   /// Delete OTP messages older than 24 hours from both local Isar and native provider
-  Future<void> deleteExpiredOtps() async {
-    final latestMsg = await isar.messageModels
-        .where()
-        .sortByTimestampDesc()
-        .findFirst();
+  // Future<void> deleteExpiredOtps() async {
+  //   final latestMsg = await isar.messageModels
+  //       .where()
+  //       .sortByTimestampDesc()
+  //       .findFirst();
 
-    DateTime referenceTime = DateTime.now();
-    if (latestMsg != null) {
-      final diff = referenceTime.difference(latestMsg.timestamp).abs();
-      // If the latest message timestamp is within 24 hours of device time, trust it
-      if (diff.inHours < 24) {
-        referenceTime = latestMsg.timestamp;
-      }
-    }
+  //   DateTime referenceTime = DateTime.now();
+  //   if (latestMsg != null) {
+  //     final diff = referenceTime.difference(latestMsg.timestamp).abs();
+  //     // If the latest message timestamp is within 24 hours of device time, trust it
+  //     if (diff.inHours < 24) {
+  //       referenceTime = latestMsg.timestamp;
+  //     }
+  //   }
 
-    final cutoffTime = referenceTime
-        .subtract(const Duration(hours: 24))
-        .toUtc();
+  //   final cutoffTime = referenceTime
+  //       .subtract(const Duration(hours: 24))
+  //       .toUtc();
 
-    // 1. Query Isar for all messages older than cutoffTime (comparing in UTC)
-    final messages = await isar.messageModels
-        .filter()
-        .timestampLessThan(cutoffTime)
-        .findAll();
+  //   // 1. Query Isar for all messages older than cutoffTime (comparing in UTC)
+  //   final messages = await isar.messageModels
+  //       .filter()
+  //       .timestampLessThan(cutoffTime)
+  //       .findAll();
 
-    final List<MessageModel> otpsToDelete = [];
-    for (final msg in messages) {
-      if (MessageClassifier.classify(msg.body, msg.threadAddress) ==
-          MessageCategory.otp) {
-        otpsToDelete.add(msg);
-      }
-    }
+  //   final List<MessageModel> otpsToDelete = [];
+  //   for (final msg in messages) {
+  //     if (MessageClassifier.classify(msg.body, msg.threadAddress) ==
+  //         MessageCategory.otp) {
+  //       otpsToDelete.add(msg);
+  //     }
+  //   }
 
-    if (otpsToDelete.isEmpty) return;
+  //   if (otpsToDelete.isEmpty) return;
 
-    // 2. Delete natively (best-effort)
-    for (final msg in otpsToDelete) {
-      if (!msg.nativeMessageId.startsWith('temp_')) {
-        try {
-          await _channel.invokeMethod('deleteSms', {
-            'messageId': msg.nativeMessageId,
-          });
-        } catch (_) {}
-      }
-    }
+  //   // 2. Delete natively (best-effort)
+  //   for (final msg in otpsToDelete) {
+  //     if (!msg.nativeMessageId.startsWith('temp_')) {
+  //       try {
+  //         await _channel.invokeMethod('deleteSms', {
+  //           'messageId': msg.nativeMessageId,
+  //         });
+  //       } catch (_) {}
+  //     }
+  //   }
 
-    // 3. Delete from local Isar
-    await isar.writeTxn(() async {
-      final idsToDelete = otpsToDelete.map((m) => m.id).toList();
-      await isar.messageModels.deleteAll(idsToDelete);
+  //   // 3. Delete from local Isar
+  //   await isar.writeTxn(() async {
+  //     final idsToDelete = otpsToDelete.map((m) => m.id).toList();
+  //     await isar.messageModels.deleteAll(idsToDelete);
 
-      // Clean up affected threads
-      final affectedAddresses = otpsToDelete
-          .map((m) => m.threadAddress)
-          .toSet();
-      for (final address in affectedAddresses) {
-        final thread = await isar.threadModels
-            .filter()
-            .addressEqualTo(address)
-            .findFirst();
-        if (thread != null) {
-          final latestMsg = await isar.messageModels
-              .filter()
-              .threadAddressEqualTo(address)
-              .sortByTimestampDesc()
-              .findFirst();
+  //     // Clean up affected threads
+  //     final affectedAddresses = otpsToDelete
+  //         .map((m) => m.threadAddress)
+  //         .toSet();
+  //     for (final address in affectedAddresses) {
+  //       final thread = await isar.threadModels
+  //           .filter()
+  //           .addressEqualTo(address)
+  //           .findFirst();
+  //       if (thread != null) {
+  //         final latestMsg = await isar.messageModels
+  //             .filter()
+  //             .threadAddressEqualTo(address)
+  //             .sortByTimestampDesc()
+  //             .findFirst();
 
-          if (latestMsg != null) {
-            thread.lastMessage = latestMsg.body;
-            thread.timestamp = latestMsg.timestamp;
-            await isar.threadModels.put(thread);
-          } else {
-            await isar.threadModels.delete(thread.id);
-          }
-        }
-      }
-    });
-  }
+  //         if (latestMsg != null) {
+  //           thread.lastMessage = latestMsg.body;
+  //           thread.timestamp = latestMsg.timestamp;
+  //           await isar.threadModels.put(thread);
+  //         } else {
+  //           await isar.threadModels.delete(thread.id);
+  //         }
+  //       }
+  //     }
+  //   });
+  // }
 
   /// Watch all threads reactive stream
   Stream<List<ThreadModel>> watchThreads() {

@@ -250,7 +250,8 @@ class _MessageBubbleState extends State<MessageBubble> {
       color: linkColor,
       decoration: TextDecoration.underline,
       decorationColor: linkColor,
-      fontWeight: FontWeight.bold,
+      fontWeight: FontWeight.normal,
+      fontSize: theme.textTheme.bodyMedium!.fontSize,
     );
 
     for (final match in matches) {
@@ -306,7 +307,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         : theme.colorScheme.surfaceContainerHighest;
 
     final textStyle =
-        theme.textTheme.bodyLarge?.copyWith(
+        theme.textTheme.bodyMedium?.copyWith(
           color: isMe
               ? theme.colorScheme.onPrimary
               : theme.colorScheme.onSurface,
