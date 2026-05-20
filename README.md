@@ -13,20 +13,57 @@ IT IS NOT FULLY FUNCTIONAL YET. I AM DEVELOPING IT. WELL YOU CAN CHAT, WITHOUT S
 
 ## 🎨 Preview
 
-> [!NOTE]
-> *Screenshots coming soon! Below are the interactive states currently implemented.*
+
 
 <div align="center">
   <table>
     <tr>
-      <td align="center"><b>Permissions & Onboarding</b></td>
-      <td align="center"><b>Smart Inbox & Categorization</b></td>
-      <td align="center"><b>Smart Cards (OTP & Bank)</b></td>
+      <td rowspan="2" align="center" valign="top">
+        <a href="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/chat.png">
+          <img src="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/chat.png" width="220" alt="Personal Chats Screen">
+        </a>
+        <br>
+        <b>💬 Personal Chats</b>
+      </td>
+      <td align="center" valign="top">
+        <a href="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/hub.png">
+          <img src="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/hub.png" width="220" alt="Smart Inbox Screen">
+        </a>
+        <br>
+        <b>🧠 Smart Inbox</b>
+      </td>
+      <td rowspan="2" align="center" valign="top">
+        <a href="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/chatBubble.png">
+          <img src="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/chatBubble.png" width="220" alt="Interactive Conversation Screen">
+        </a>
+        <br>
+        <b>✉️ Interactive Chat</b>
+      </td>
     </tr>
     <tr>
-      <td><code>[ Placeholder: Onboarding & Default SMS Prompt ]</code></td>
-      <td><code>[ Placeholder: Classified Chats / Threads ]</code></td>
-      <td><code>[ Placeholder: Transactions & OTP Quick Actions ]</code></td>
+      <td align="center" valign="top">
+        <a href="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/notification.png">
+          <img src="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/notification.png" width="220" alt="OTP Notification Actions">
+        </a>
+        <br>
+        <b>⚡ OTP Copy Actions</b>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2" align="center" valign="top">
+        <a href="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/settings.png">
+          <img src="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/settings.png" width="450" alt="Settings and Styling Screen">
+        </a>
+        <br>
+        <b>🎨 Material You Themes</b>
+      </td>
+      <td align="center" valign="top">
+        <a href="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/bubble.png">
+          <img src="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/bubble.png" width="220" alt="System Bubble Notifications">
+        </a>
+        <br>
+        <b>📱 Chat Bubbles</b>
+      </td>
     </tr>
   </table>
 </div>
@@ -107,8 +144,8 @@ graph TD
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/msgs.git
-   cd msgs
+   git clone https://github.com/Najeer-k11/Messages-FlutterApp.git
+   cd Messages-FlutterApp
    ```
 
 2. **Install dependencies:**
