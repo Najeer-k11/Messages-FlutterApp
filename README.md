@@ -46,7 +46,7 @@ IT IS NOT FULLY FUNCTIONAL YET. I AM DEVELOPING IT. WELL YOU CAN CHAT, WITHOUT S
           <img src="https://raw.githubusercontent.com/Najeer-k11/Messages-FlutterApp/main/screenshots/notification.png" width="220" alt="OTP Notification Actions">
         </a>
         <br>
-        <b>⚡ OTP Copy Actions</b>
+        <b>⚡ Notifications</b>
       </td>
     </tr>
     <tr>
