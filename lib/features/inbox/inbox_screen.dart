@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:msgs/features/inbox/bloc/inbox_bloc.dart';
+import 'package:msgs/features/inbox/bloc/inbox_event.dart';
 import 'package:msgs/features/inbox/bloc/inbox_state.dart';
 import 'package:msgs/features/inbox/bloc/hubs_bloc.dart';
 import 'package:msgs/features/inbox/widgets/thread_card.dart';
@@ -22,7 +23,6 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<bool> _isFabExpanded = ValueNotifier<bool>(true);
   late final HubsBloc _hubsBloc;
-
   @override
   void initState() {
     super.initState();
