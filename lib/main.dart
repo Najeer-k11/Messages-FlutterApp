@@ -57,7 +57,7 @@ class MsgsApp extends StatelessWidget {
               valueListenable: themeNotifier,
               builder: (context, themeMode, _) {
                 return MaterialApp(
-                  title: 'Msgs',
+                  title: 'Messages',
                   theme: AppTheme.lightTheme(lightDynamic),
                   darkTheme: AppTheme.darkTheme(darkDynamic),
                   themeMode: themeMode,

@@ -64,9 +64,9 @@ class _ComposerState extends State<Composer> {
                         color: theme.colorScheme.primary,
                       ),
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('File sharing coming soon!')),
-                        );
+                        // ScaffoldMessenger.of(context).showSnackBar(
+                        //   SnackBar(content: Text('File sharing coming soon!')),
+                        // );
                       },
                     ),
                     Expanded(
@@ -87,20 +87,20 @@ class _ComposerState extends State<Composer> {
                         ),
                       ),
                     ),
-                    if (!_hasText)
-                      IconButton(
-                        icon: Icon(
-                          Icons.camera_alt,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Camera feature coming soon!'),
-                            ),
-                          );
-                        },
-                      ),
+                    // if (!_hasText)
+                    //   IconButton(
+                    //     icon: Icon(
+                    //       Icons.camera_alt,
+                    //       color: theme.colorScheme.onSurfaceVariant,
+                    //     ),
+                    //     onPressed: () {
+                    //       ScaffoldMessenger.of(context).showSnackBar(
+                    //         SnackBar(
+                    //           content: Text('Camera feature coming soon!'),
+                    //         ),
+                    //       );
+                    //     },
+                    //   ),
                   ],
                 ),
               ),
@@ -119,7 +119,7 @@ class _ComposerState extends State<Composer> {
               ),
               child: IconButton(
                 icon: Icon(
-                  _hasText ? Icons.send : Icons.mic,
+                  Icons.send,
                   color: _hasText
                       ? theme.colorScheme.onPrimary
                       : theme.colorScheme.onSurfaceVariant,
