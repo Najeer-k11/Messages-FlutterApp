@@ -3,8 +3,13 @@ package com.msgs.ndev.app
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
+import android.database.ContentObserver
 import android.database.Cursor
 import android.net.Uri
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.Build
 import android.provider.ContactsContract
 import android.provider.Telephony
 import android.telephony.SmsManager
@@ -19,10 +24,46 @@ import kotlinx.coroutines.withContext
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.msgs.ndevmsgs/sms"
+    private var methodChannel: MethodChannel? = null
+    private var smsObserver: ContentObserver? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        registerSmsObserver()
+    }
+
+    override fun onDestroy() {
+        unregisterSmsObserver()
+        super.onDestroy()
+    }
+
+    private fun registerSmsObserver() {
+        val handler = Handler(Looper.getMainLooper())
+        smsObserver = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean) {
+                super.onChange(selfChange)
+                methodChannel?.invokeMethod("onSmsReceived", null)
+            }
+        }
+        contentResolver.registerContentObserver(
+            Uri.parse("content://sms"),
+            true,
+            smsObserver!!
+        )
+    }
+
+    private fun unregisterSmsObserver() {
+        smsObserver?.let {
+            contentResolver.unregisterContentObserver(it)
+            smsObserver = null
+        }
+    }
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler {
+        val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        methodChannel = channel
+        channel.setMethodCallHandler {
             call, result ->
             when (call.method) {
                 "getAllSms" -> {

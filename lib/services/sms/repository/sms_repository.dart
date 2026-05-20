@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:isar_community/isar.dart';
 import 'package:msgs/services/sms/models/message_model.dart';
@@ -6,8 +7,20 @@ import 'package:msgs/services/sms/models/thread_model.dart';
 class SmsRepository {
   static const MethodChannel _channel = MethodChannel('com.msgs.ndevmsgs/sms');
   final Isar isar;
+  Timer? _syncDebounce;
 
-  SmsRepository({required this.isar});
+  SmsRepository({required this.isar}) {
+    _channel.setMethodCallHandler(_handleMethodCall);
+  }
+
+  Future<dynamic> _handleMethodCall(MethodCall call) async {
+    if (call.method == 'onSmsReceived') {
+      _syncDebounce?.cancel();
+      _syncDebounce = Timer(const Duration(milliseconds: 500), () {
+        syncSms();
+      });
+    }
+  }
 
   static String normalizeAddress(String address) {
     final clean = address.trim();

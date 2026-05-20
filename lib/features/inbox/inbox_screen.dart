@@ -18,7 +18,7 @@ class InboxScreen extends StatefulWidget {
   State<InboxScreen> createState() => _InboxScreenState();
 }
 
-class _InboxScreenState extends State<InboxScreen> {
+class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<bool> _isFabExpanded = ValueNotifier<bool>(true);
   late final HubsBloc _hubsBloc;
@@ -26,17 +26,26 @@ class _InboxScreenState extends State<InboxScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // _scrollController.addListener(_onScroll);
     _hubsBloc = HubsBloc(inboxBloc: context.read<InboxBloc>());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _isFabExpanded.dispose();
     _hubsBloc.close();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      context.read<InboxBloc>().add(SyncInboxEvent());
+    }
   }
 
 
