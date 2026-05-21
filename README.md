@@ -1,13 +1,13 @@
-# 📱 Msgs — Smart SMS & Transaction Client
+# 📱 Messages — Smart SMS & Transaction Client
 
 [![Dart](https://img.shields.io/badge/Dart-%230175C2.svg?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
 [![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white)](https://flutter.dev)
 [![Isar Database](https://img.shields.io/badge/Database-Isar-blue?style=for-the-badge)](https://isar.dev)
 [![State Management](https://img.shields.io/badge/State-BLoC-29B6F6?style=for-the-badge)](https://bloclibrary.dev)
 
-A modern, fast, and intelligent SMS client for Android, built with **Flutter**. Msgs parses and categorizes your SMS inbox on-device, offering instant access to OTPs and visual transaction tracking with Material 3 dynamic styling.
+A modern, fast, and intelligent SMS client for Android, built with **Flutter**. Messages parses and categorizes your SMS inbox on-device, offering instant access to OTPs and visual transaction tracking with Material 3 dynamic styling.
 
-IT IS NOT FULLY FUNCTIONAL YET. I AM DEVELOPING IT. WELL YOU CAN CHAT, WITHOUT SENDING MULTIMEDIA. AND LINKS DETECTION COMING IN THE NEXT UPDATES.
+IT IS NOT FULLY FUNCTIONAL YET. I AM DEVELOPING IT. WELL YOU CAN CHAT, WITHOUT SENDING MULTIMEDIA.
 
 ---
 
@@ -164,8 +164,6 @@ graph TD
    ```bash
    flutter run
    ```
-5. **ISSUES:**
-   if you face any issues while building it is mostly because of isar_flutter_libs package. I changed it in local pub package. you can change this package to community version in pub.dev.
 ---
 
 ## 🔒 Permissions & Safety
