@@ -251,6 +251,37 @@ class SmsRepository {
     }
   }
 
+  /// Batch delete multiple threads natively from the Android SMS provider + local Isar
+  Future<void> deleteThreadsBatch(
+    List<({String address, String nativeThreadId})> threads,
+  ) async {
+    // 1. Delete natively (best-effort for each thread)
+    for (final t in threads) {
+      try {
+        if (t.nativeThreadId.isNotEmpty) {
+          await _channel.invokeMethod('deleteThread', {
+            'threadId': t.nativeThreadId,
+          });
+        }
+      } catch (_) {}
+    }
+
+    // 2. Remove all from local Isar in a single transaction
+    final normalizedAddresses = threads
+        .map((t) => normalizeAddress(t.address))
+        .toList();
+
+    await isar.writeTxn(() async {
+      for (final address in normalizedAddresses) {
+        await isar.messageModels
+            .filter()
+            .threadAddressEqualTo(address)
+            .deleteAll();
+        await isar.threadModels.filter().addressEqualTo(address).deleteAll();
+      }
+    });
+  }
+
   /// Delete a thread natively from the Android SMS provider + local Isar
   Future<void> deleteThread(String address, String nativeThreadId) async {
     final normalized = normalizeAddress(address);

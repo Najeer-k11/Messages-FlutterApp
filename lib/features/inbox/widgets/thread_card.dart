@@ -8,8 +8,18 @@ import 'package:msgs/services/sms/models/thread_model.dart';
 class ThreadCard extends StatelessWidget {
   final ThreadModel thread;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final bool isSelected;
+  final bool isSelecting;
 
-  const ThreadCard({super.key, required this.thread, required this.onTap});
+  const ThreadCard({
+    super.key,
+    required this.thread,
+    required this.onTap,
+    this.onLongPress,
+    this.isSelected = false,
+    this.isSelecting = false,
+  });
 
   String _formatTime(DateTime time) {
     final localTime = time.toLocal();
@@ -28,6 +38,101 @@ class ThreadCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bool hasUnread = thread.unreadCount > 0;
+
+    Widget card = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        borderRadius: BorderRadius.circular(24.0),
+        splashColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+        highlightColor: theme.colorScheme.primary.withValues(alpha: 0.05),
+        child: Container(
+          decoration: isSelected
+              ? BoxDecoration(
+                  color: theme.colorScheme.primaryContainer.withValues(
+                    alpha: 0.4,
+                  ),
+                  borderRadius: BorderRadius.circular(24.0),
+                )
+              : null,
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Avatar or checkbox
+              if (isSelecting)
+                _buildSelectionIndicator(theme)
+              else
+                _buildAvatar(theme, hasUnread),
+              const SizedBox(width: 16),
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Hero(
+                            tag: 'name_${thread.id}',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: Text(
+                                thread.senderName,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: hasUnread
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Text(
+                          _formatTime(thread.timestamp),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: hasUnread
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                            fontWeight: hasUnread
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      thread.lastMessage,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: hasUnread
+                            ? theme.colorScheme.onSurface
+                            : theme.colorScheme.onSurfaceVariant,
+                        fontWeight: hasUnread
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Disable swipe-to-dismiss when in selection mode
+    if (isSelecting) {
+      return card;
+    }
 
     return Dismissible(
       key: Key('thread_${thread.address}'),
@@ -80,81 +185,32 @@ class ThreadCard extends StatelessWidget {
           size: 28,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(24.0),
-          splashColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-          highlightColor: theme.colorScheme.primary.withValues(alpha: 0.05),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Avatar
-                _buildAvatar(theme, hasUnread),
-                const SizedBox(width: 16),
-                // Content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Hero(
-                              tag: 'name_${thread.id}',
-                              child: Material(
-                                color: Colors.transparent,
-                                child: Text(
-                                  thread.senderName,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: hasUnread
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: theme.colorScheme.onSurface,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ),
-                          Text(
-                            _formatTime(thread.timestamp),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: hasUnread
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurfaceVariant,
-                              fontWeight: hasUnread
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        thread.lastMessage,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: hasUnread
-                              ? theme.colorScheme.onSurface
-                              : theme.colorScheme.onSurfaceVariant,
-                          fontWeight: hasUnread
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+      child: card,
+    );
+  }
+
+  Widget _buildSelectionIndicator(ThemeData theme) {
+    return SizedBox(
+      width: 52,
+      height: 52,
+      child: Center(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isSelected ? theme.colorScheme.primary : Colors.transparent,
+            border: Border.all(
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
+              width: 2,
             ),
           ),
+          child: isSelected
+              ? Icon(Icons.check, size: 18, color: theme.colorScheme.onPrimary)
+              : null,
         ),
       ),
     );

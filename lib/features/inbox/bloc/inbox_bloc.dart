@@ -10,18 +10,22 @@ class InboxBloc extends Bloc<InboxEvent, InboxState> {
   StreamSubscription? _threadsSubscription;
 
   InboxBloc({required SmsRepository smsRepository})
-      : _smsRepository = smsRepository,
-        super(InboxInitial()) {
+    : _smsRepository = smsRepository,
+      super(InboxInitial()) {
     on<SyncInboxEvent>(_onSyncInbox);
     on<_UpdateThreadsEvent>(_onUpdateThreads);
     on<DeleteThreadEvent>(_onDeleteThread);
+    on<BatchDeleteThreadsEvent>(_onBatchDeleteThreads);
   }
 
   void _onUpdateThreads(_UpdateThreadsEvent event, Emitter<InboxState> emit) {
     emit(InboxLoaded(threads: event.threads));
   }
 
-  Future<void> _onSyncInbox(SyncInboxEvent event, Emitter<InboxState> emit) async {
+  Future<void> _onSyncInbox(
+    SyncInboxEvent event,
+    Emitter<InboxState> emit,
+  ) async {
     emit(InboxLoading());
 
     try {
@@ -41,10 +45,22 @@ class InboxBloc extends Bloc<InboxEvent, InboxState> {
   }
 
   Future<void> _onDeleteThread(
-      DeleteThreadEvent event, Emitter<InboxState> emit) async {
+    DeleteThreadEvent event,
+    Emitter<InboxState> emit,
+  ) async {
     try {
       await _smsRepository.deleteThread(event.address, event.nativeThreadId);
       // The Isar stream will automatically push a new InboxLoaded with thread removed
+    } catch (_) {}
+  }
+
+  Future<void> _onBatchDeleteThreads(
+    BatchDeleteThreadsEvent event,
+    Emitter<InboxState> emit,
+  ) async {
+    try {
+      await _smsRepository.deleteThreadsBatch(event.threads);
+      // The Isar stream will automatically push a new InboxLoaded with threads removed
     } catch (_) {}
   }
 
