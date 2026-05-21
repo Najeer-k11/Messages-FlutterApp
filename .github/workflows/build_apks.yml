@@ -59,10 +59,13 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: flutter build apk --release
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v7
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
         with:
-          path: build/app/outputs/flutter-apk/app-release.apk
-          archive: false
-          if-no-files-found: error
+          tag_name: build-${{ github.run_number }}
+          name: "Build #${{ github.run_number }}"
+          files: build/app/outputs/flutter-apk/app-release.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
