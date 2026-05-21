@@ -61,6 +61,31 @@ class SmsReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun extractOtp(body: String): String? {
+        // Match 4-8 digit OTP codes commonly found in SMS
+        val patterns = listOf(
+            Regex("""(?:OTP|otp|code|Code|CODE|pin|PIN|Pin)[\s:is]*(\d{4,8})"""),
+            Regex("""(\d{4,8})[\s]*(?:is your|is the|is ur)"""),
+            Regex("""(?:verify|verification|authenticate)[\s\S]*?(\d{4,8})""", RegexOption.IGNORE_CASE),
+            Regex("""\b(\d{4,8})\b""")  // fallback: any standalone 4-8 digit number
+        )
+
+        // Only try extraction if the message looks like an OTP message
+        val otpKeywords = listOf("otp", "code", "verify", "verification", "pin", "authenticate", "one.time", "one time")
+        val lowerBody = body.lowercase()
+        val looksLikeOtp = otpKeywords.any { lowerBody.contains(it) }
+
+        if (!looksLikeOtp) return null
+
+        for (pattern in patterns) {
+            val match = pattern.find(body)
+            if (match != null && match.groupValues.size > 1) {
+                return match.groupValues[1]
+            }
+        }
+        return null
+    }
+
     private fun showNotification(context: Context, sender: String, body: String) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "sms_channel"
@@ -85,6 +110,8 @@ class SmsReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val notificationId = System.currentTimeMillis().toInt()
+
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.sym_action_chat)
             .setContentTitle(sender)
@@ -93,6 +120,26 @@ class SmsReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+        // If OTP detected, add a "Copy OTP" action button
+        val otp = extractOtp(body)
+        if (otp != null) {
+            val copyIntent = Intent(context, CopyOtpReceiver::class.java).apply {
+                putExtra("otp", otp)
+                putExtra("notificationId", notificationId)
+            }
+            val copyPendingIntent = PendingIntent.getBroadcast(
+                context,
+                notificationId,
+                copyIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(
+                android.R.drawable.ic_menu_edit,
+                "Copy OTP: $otp",
+                copyPendingIntent
+            )
+        }
+
+        notificationManager.notify(notificationId, builder.build())
     }
 }
