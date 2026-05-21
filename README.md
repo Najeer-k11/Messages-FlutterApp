@@ -180,4 +180,4 @@ All message processing, categorization, and pattern parsing happens **strictly o
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+see the [LICENSE](LICENSE) file for details.
