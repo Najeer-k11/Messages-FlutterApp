@@ -26,10 +26,55 @@ class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.msgs.ndevmsgs/sms"
     private var methodChannel: MethodChannel? = null
     private var smsObserver: ContentObserver? = null
+    private var pendingIntentData: Map<String, String>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         registerSmsObserver()
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action
+        val data = intent.data
+        var address: String? = null
+        var body: String? = null
+
+        if (action == Intent.ACTION_SENDTO || action == Intent.ACTION_VIEW) {
+            if (data != null) {
+                val scheme = data.scheme
+                if (scheme == "sms" || scheme == "smsto" || scheme == "mms" || scheme == "mmsto") {
+                    var ssp = data.schemeSpecificPart ?: ""
+                    if (ssp.contains("?")) {
+                        val parts = ssp.split("?", limit = 2)
+                        ssp = parts[0]
+                        val query = parts[1]
+                        val queryUri = Uri.parse("sms://host?$query")
+                        body = queryUri.getQueryParameter("body")
+                    }
+                    address = Uri.decode(ssp)
+                }
+            }
+        } else if (action == Intent.ACTION_SEND) {
+            body = intent.getStringExtra(Intent.EXTRA_TEXT)
+            address = intent.getStringExtra("android.intent.extra.PHONE_NUMBER")
+                ?: intent.getStringExtra(Intent.EXTRA_PHONE_NUMBER)
+        }
+
+        if (address != null || body != null) {
+            val dataMap = mapOf(
+                "address" to (address ?: ""),
+                "body" to (body ?: "")
+            )
+            pendingIntentData = dataMap
+            methodChannel?.invokeMethod("onNewIntentReceived", dataMap)
+        }
     }
 
     override fun onDestroy() {
@@ -66,6 +111,10 @@ class MainActivity: FlutterActivity() {
         channel.setMethodCallHandler {
             call, result ->
             when (call.method) {
+                "getPendingIntentData" -> {
+                    result.success(pendingIntentData)
+                    pendingIntentData = null
+                }
                 "getAllSms" -> {
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
@@ -196,10 +245,91 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    private fun getContactName(context: Context, phoneNumber: String): String? {
+        if (phoneNumber.isBlank() || phoneNumber.contains("insert-address")) return null
+        val uri = Uri.withAppendedPath(
+            ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+            Uri.encode(phoneNumber)
+        )
+        val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME)
+        return try {
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.DISPLAY_NAME))
+                } else null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun getMmsAddress(mmsId: String, msgBox: Int): String {
+        val uri = Uri.parse("content://mms/$mmsId/addr")
+        val projection = arrayOf("address", "type")
+        var address = ""
+        try {
+            contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                val addressIdx = cursor.getColumnIndexOrThrow("address")
+                val typeIdx = cursor.getColumnIndexOrThrow("type")
+                
+                val targetType = if (msgBox == 1) 137 else 151
+                var fallbackAddress = ""
+                while (cursor.moveToNext()) {
+                    val addr = cursor.getString(addressIdx) ?: continue
+                    val type = cursor.getInt(typeIdx)
+                    if (type == targetType) {
+                        address = addr
+                        break
+                    }
+                    if (fallbackAddress.isEmpty() && addr.isNotBlank() && !addr.contains("insert-address")) {
+                        fallbackAddress = addr
+                    }
+                }
+                if (address.isEmpty()) {
+                    address = fallbackAddress
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
+        return if (address.isBlank() || address.contains("insert-address")) "Unknown" else address
+    }
+
+    private fun getMmsBody(mmsId: String): String {
+        val uri = Uri.parse("content://mms/part")
+        val projection = arrayOf("ct", "text")
+        val selection = "mid = ?"
+        val selectionArgs = arrayOf(mmsId)
+        var body = ""
+        var hasMedia = false
+        try {
+            contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
+                val ctIdx = cursor.getColumnIndexOrThrow("ct")
+                val textIdx = cursor.getColumnIndexOrThrow("text")
+                while (cursor.moveToNext()) {
+                    val ct = cursor.getString(ctIdx) ?: continue
+                    if (ct == "text/plain") {
+                        body = cursor.getString(textIdx) ?: ""
+                    } else if (ct.startsWith("image/") || ct.startsWith("video/") || ct.startsWith("audio/")) {
+                        hasMedia = true
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
+        if (body.isEmpty() && hasMedia) {
+            return "[Multimedia Message]"
+        }
+        return body
+    }
+
     private fun getAllSms(): List<Map<String, Any>> {
-        val smsList = mutableListOf<Map<String, Any>>()
-        val uri: Uri = Telephony.Sms.CONTENT_URI
-        val projection = arrayOf(
+        val combinedList = mutableListOf<Map<String, Any>>()
+        
+        // 1. Fetch SMS
+        val smsUri: Uri = Telephony.Sms.CONTENT_URI
+        val smsProjection = arrayOf(
             Telephony.Sms._ID,
             Telephony.Sms.ADDRESS,
             Telephony.Sms.BODY,
@@ -209,31 +339,92 @@ class MainActivity: FlutterActivity() {
             Telephony.Sms.THREAD_ID,
         )
 
-        val cursor: Cursor? = contentResolver.query(uri, projection, null, null, Telephony.Sms.DEFAULT_SORT_ORDER)
+        try {
+            contentResolver.query(smsUri, smsProjection, null, null, null)?.use { cursor ->
+                val idIndex = cursor.getColumnIndexOrThrow(Telephony.Sms._ID)
+                val addressIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+                val bodyIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
+                val dateIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
+                val typeIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.TYPE)
+                val readIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.READ)
+                val threadIdIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
 
-        cursor?.use {
-            val idIndex = it.getColumnIndexOrThrow(Telephony.Sms._ID)
-            val addressIndex = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
-            val bodyIndex = it.getColumnIndexOrThrow(Telephony.Sms.BODY)
-            val dateIndex = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
-            val typeIndex = it.getColumnIndexOrThrow(Telephony.Sms.TYPE)
-            val readIndex = it.getColumnIndexOrThrow(Telephony.Sms.READ)
-            val threadIdIndex = it.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
+                while (cursor.moveToNext()) {
+                    val address = cursor.getString(addressIndex) ?: "Unknown"
+                    combinedList.add(mapOf(
+                        "id" to "sms_" + cursor.getString(idIndex),
+                        "address" to address,
+                        "body" to (cursor.getString(bodyIndex) ?: ""),
+                        "date" to cursor.getLong(dateIndex),
+                        "type" to cursor.getInt(typeIndex),
+                        "read" to cursor.getInt(readIndex),
+                        "thread_id" to (cursor.getString(threadIdIndex) ?: "")
+                    ))
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore/log
+        }
 
-            while (it.moveToNext()) {
-                val smsMap = mapOf(
-                    "id" to it.getString(idIndex),
-                    "address" to (it.getString(addressIndex) ?: "Unknown"),
-                    "body" to (it.getString(bodyIndex) ?: ""),
-                    "date" to it.getLong(dateIndex),
-                    "type" to it.getInt(typeIndex),
-                    "read" to it.getInt(readIndex),
-                    "thread_id" to it.getString(threadIdIndex)
-                )
-                smsList.add(smsMap)
+        // 2. Fetch MMS
+        val mmsUri = Uri.parse("content://mms")
+        val mmsProjection = arrayOf(
+            "_id",
+            "date",
+            "msg_box",
+            "read",
+            "thread_id"
+        )
+
+        try {
+            contentResolver.query(mmsUri, mmsProjection, null, null, null)?.use { cursor ->
+                val idIdx = cursor.getColumnIndexOrThrow("_id")
+                val dateIdx = cursor.getColumnIndexOrThrow("date")
+                val msgBoxIdx = cursor.getColumnIndexOrThrow("msg_box")
+                val readIdx = cursor.getColumnIndexOrThrow("read")
+                val threadIdIdx = cursor.getColumnIndexOrThrow("thread_id")
+
+                while (cursor.moveToNext()) {
+                    val mmsId = cursor.getString(idIdx)
+                    val msgBox = cursor.getInt(msgBoxIdx)
+                    val address = getMmsAddress(mmsId, msgBox)
+                    val body = getMmsBody(mmsId)
+                    val date = cursor.getLong(dateIdx)
+                    combinedList.add(mapOf(
+                        "id" to "mms_" + mmsId,
+                        "address" to address,
+                        "body" to body,
+                        "date" to (date * 1000), // MMS dates are in seconds
+                        "type" to msgBox,
+                        "read" to cursor.getInt(readIdx),
+                        "thread_id" to (cursor.getString(threadIdIdx) ?: "")
+                    ))
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore/log
+        }
+
+        // 3. Perform native PhoneLookup for unique addresses
+        val uniqueAddresses = combinedList.map { it["address"] as String }.distinct()
+        val contactsMap = mutableMapOf<String, String>()
+        for (addr in uniqueAddresses) {
+            val name = getContactName(context, addr)
+            if (name != null) {
+                contactsMap[addr] = name
             }
         }
-        return smsList
+
+        // 4. Attach sender_name
+        val finalList = combinedList.map { item ->
+            val address = item["address"] as String
+            val senderName = contactsMap[address] ?: address
+            item.toMutableMap().apply {
+                put("sender_name", senderName)
+            }
+        }
+
+        return finalList.sortedByDescending { (it["date"] as Long) }
     }
 
     private fun deleteThread(threadId: String): Int {
@@ -249,8 +440,15 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun deleteSms(messageId: String): Int {
-        val uri = Uri.parse("content://sms/$messageId")
-        return contentResolver.delete(uri, null, null)
+        return if (messageId.startsWith("mms_")) {
+            val id = messageId.substringAfter("mms_")
+            val uri = Uri.parse("content://mms/$id")
+            contentResolver.delete(uri, null, null)
+        } else {
+            val id = messageId.substringAfter("sms_")
+            val uri = Uri.parse("content://sms/$id")
+            contentResolver.delete(uri, null, null)
+        }
     }
 
     private fun markThreadAsRead(threadId: String) {
@@ -263,6 +461,14 @@ class MainActivity: FlutterActivity() {
             "thread_id = ? AND read = 0",
             arrayOf(threadId)
         )
+        try {
+            contentResolver.update(
+                Uri.parse("content://mms"),
+                values,
+                "thread_id = ? AND read = 0",
+                arrayOf(threadId)
+            )
+        } catch (_: Exception) {}
     }
 
     private fun getContacts(): List<Map<String, String>> {

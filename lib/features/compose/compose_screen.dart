@@ -7,7 +7,14 @@ import 'package:isar_community/isar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class ComposeScreen extends StatefulWidget {
-  const ComposeScreen({super.key});
+  final String? initialAddress;
+  final String? initialBody;
+
+  const ComposeScreen({
+    super.key,
+    this.initialAddress,
+    this.initialBody,
+  });
 
   @override
   State<ComposeScreen> createState() => _ComposeScreenState();
@@ -24,6 +31,11 @@ class _ComposeScreenState extends State<ComposeScreen> {
     super.initState();
     _loadContacts();
     _searchController.addListener(_onSearchChanged);
+    if (widget.initialAddress != null && widget.initialAddress!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startConversation(widget.initialAddress!, widget.initialAddress!);
+      });
+    }
   }
 
   @override
@@ -107,7 +119,10 @@ class _ComposeScreenState extends State<ComposeScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => ConversationScreen(thread: thread!),
+          builder: (context) => ConversationScreen(
+            thread: thread!,
+            initialBody: widget.initialBody,
+          ),
         ),
       );
     }

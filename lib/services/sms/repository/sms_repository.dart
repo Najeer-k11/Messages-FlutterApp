@@ -8,6 +8,10 @@ class SmsRepository {
   static const MethodChannel _channel = MethodChannel('com.msgs.ndevmsgs/sms');
   final Isar isar;
   Timer? _syncDebounce;
+  final StreamController<Map<String, String>> _intentStreamController =
+      StreamController<Map<String, String>>.broadcast();
+
+  Stream<Map<String, String>> get intentStream => _intentStreamController.stream;
 
   SmsRepository({required this.isar}) {
     _channel.setMethodCallHandler(_handleMethodCall);
@@ -19,7 +23,20 @@ class SmsRepository {
       _syncDebounce = Timer(const Duration(milliseconds: 500), () {
         syncSms();
       });
+    } else if (call.method == 'onNewIntentReceived') {
+      final data = Map<String, String>.from(call.arguments);
+      _intentStreamController.add(data);
     }
+  }
+
+  Future<Map<String, String>?> getPendingIntentData() async {
+    try {
+      final result = await _channel.invokeMethod('getPendingIntentData');
+      if (result != null) {
+        return Map<String, String>.from(result);
+      }
+    } catch (_) {}
+    return null;
   }
 
   static String normalizeAddress(String address) {
@@ -93,12 +110,14 @@ class SmsRepository {
 
         messagesToSave.add(message);
 
+        final resolvedSenderName = map['sender_name'] as String? ?? contactsMap[address] ?? rawAddress;
+
         // Process Thread
         if (!threadsMap.containsKey(address)) {
           threadsMap[address] = ThreadModel()
             ..address = address
             ..nativeThreadId = nativeThreadId
-            ..senderName = contactsMap[address] ?? rawAddress
+            ..senderName = resolvedSenderName
             ..lastMessage = body
             ..timestamp = timestamp
             ..unreadCount = isRead ? 0 : 1;
@@ -108,9 +127,7 @@ class SmsRepository {
           if (nativeThreadId.isNotEmpty) {
             thread.nativeThreadId = nativeThreadId;
           }
-          if (contactsMap.containsKey(address)) {
-            thread.senderName = contactsMap[address]!;
-          }
+          thread.senderName = resolvedSenderName;
           if (timestamp.isAfter(thread.timestamp)) {
             thread.lastMessage = body;
             thread.timestamp = timestamp;

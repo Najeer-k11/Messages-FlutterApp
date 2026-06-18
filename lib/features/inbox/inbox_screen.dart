@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:msgs/features/inbox/bloc/inbox_bloc.dart';
@@ -12,6 +13,7 @@ import 'package:msgs/features/search/search_screen.dart';
 import 'package:msgs/features/settings/settings_screen.dart';
 import 'package:msgs/features/compose/compose_screen.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';
+import 'package:msgs/services/sms/repository/sms_repository.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -28,16 +30,44 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   // Multi-select state
   final Set<String> _selectedAddresses = {};
   bool get _isSelecting => _selectedAddresses.isNotEmpty;
+  StreamSubscription? _intentSubscription;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _hubsBloc = HubsBloc(inboxBloc: context.read<InboxBloc>());
+
+    final smsRepo = context.read<SmsRepository>();
+    _intentSubscription = smsRepo.intentStream.listen(_handleIntentData);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final data = await smsRepo.getPendingIntentData();
+      if (data != null) {
+        _handleIntentData(data);
+      }
+    });
+  }
+
+  void _handleIntentData(Map<String, String> data) {
+    final address = data['address'] ?? '';
+    final body = data['body'] ?? '';
+    if (address.isNotEmpty || body.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ComposeScreen(
+            initialAddress: address,
+            initialBody: body,
+          ),
+        ),
+      );
+    }
   }
 
   @override
   void dispose() {
+    _intentSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _scrollController.dispose();
     _isFabExpanded.dispose();

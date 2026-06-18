@@ -86,6 +86,24 @@ class SmsReceiver : BroadcastReceiver() {
         return null
     }
 
+    private fun getContactName(context: Context, phoneNumber: String): String? {
+        if (phoneNumber.isBlank() || phoneNumber.contains("insert-address")) return null
+        val uri = Uri.withAppendedPath(
+            android.provider.ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+            Uri.encode(phoneNumber)
+        )
+        val projection = arrayOf(android.provider.ContactsContract.PhoneLookup.DISPLAY_NAME)
+        return try {
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getString(cursor.getColumnIndexOrThrow(android.provider.ContactsContract.PhoneLookup.DISPLAY_NAME))
+                } else null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun showNotification(context: Context, sender: String, body: String) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "sms_channel"
@@ -111,10 +129,12 @@ class SmsReceiver : BroadcastReceiver() {
         )
 
         val notificationId = System.currentTimeMillis().toInt()
+        val contactName = getContactName(context, sender)
+        val title = contactName ?: sender
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.sym_action_chat)
-            .setContentTitle(sender)
+            .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)

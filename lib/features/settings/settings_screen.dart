@@ -207,9 +207,9 @@ class SettingsScreen extends StatelessWidget {
         onTap: () {
           showLicensePage(
             context: context,
-            applicationName: 'Msgs',
+            applicationName: 'Messages',
             applicationVersion: '1.0.0',
-            applicationLegalese: '© 2026 Msgs Authors. Open Source Software.',
+            applicationLegalese: '© 2026 Messages Authors. Open Source Software.',
           );
         },
       ),

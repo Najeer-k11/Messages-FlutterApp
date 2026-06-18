@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 
 class Composer extends StatefulWidget {
   final void Function(String text) onSend;
+  final String? initialText;
 
-  const Composer({super.key, required this.onSend});
+  const Composer({
+    super.key,
+    required this.onSend,
+    this.initialText,
+  });
 
   @override
   State<Composer> createState() => _ComposerState();
@@ -16,6 +21,10 @@ class _ComposerState extends State<Composer> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialText != null) {
+      _controller.text = widget.initialText!;
+      _hasText = widget.initialText!.isNotEmpty;
+    }
     _controller.addListener(() {
       final hasText = _controller.text.isNotEmpty;
       if (_hasText != hasText) {

@@ -10,8 +10,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 class ConversationScreen extends StatefulWidget {
   final ThreadModel thread;
+  final String? initialBody;
 
-  const ConversationScreen({super.key, required this.thread});
+  const ConversationScreen({
+    super.key,
+    required this.thread,
+    this.initialBody,
+  });
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -195,7 +200,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   },
                 ),
               ),
-              Composer(onSend: _sendMessage),
+              Composer(onSend: _sendMessage, initialText: widget.initialBody),
             ],
           ),
         ],
