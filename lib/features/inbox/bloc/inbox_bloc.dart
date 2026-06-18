@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:isar_community/isar.dart';
 import 'package:msgs/features/inbox/bloc/inbox_event.dart';
 import 'package:msgs/features/inbox/bloc/inbox_state.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';
