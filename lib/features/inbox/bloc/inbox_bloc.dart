@@ -26,21 +26,45 @@ class InboxBloc extends Bloc<InboxEvent, InboxState> {
     SyncInboxEvent event,
     Emitter<InboxState> emit,
   ) async {
-    emit(InboxLoading());
+    final isInitialRun = _threadsSubscription == null;
+
+    if (isInitialRun) {
+      final completer = Completer<List<ThreadModel>>();
+      _threadsSubscription = _smsRepository.watchThreads().listen((threads) {
+        if (completer.isCompleted) {
+          add(_UpdateThreadsEvent(threads: threads));
+        } else {
+          completer.complete(threads);
+        }
+      });
+
+      // Wait for the first emission from local Isar DB (extremely fast cache load)
+      final cachedThreads = await completer.future;
+
+      if (cachedThreads.isNotEmpty) {
+        emit(InboxLoaded(threads: cachedThreads));
+      } else {
+        emit(InboxLoading());
+      }
+    }
 
     try {
-      // 1. Fire off native sync
+      // Perform the native SMS provider sync in background
       await _smsRepository.syncSms();
 
-      // 2. Cancel any existing subscription
-      await _threadsSubscription?.cancel();
-
-      // 3. Listen to Isar updates
-      _threadsSubscription = _smsRepository.watchThreads().listen((threads) {
-        add(_UpdateThreadsEvent(threads: threads));
-      });
+      // If we were showing the loading spinner because there was no cached data,
+      // transition to Loaded once sync is finished.
+      if (state is InboxLoading || state is InboxInitial) {
+        final currentThreads = await _smsRepository.isar.threadModels
+            .where()
+            .sortByTimestampDesc()
+            .findAll();
+        emit(InboxLoaded(threads: currentThreads));
+      }
     } catch (e) {
-      emit(InboxError(message: e.toString()));
+      if (state is! InboxLoaded) {
+        emit(InboxError(message: e.toString()));
+      }
     }
   }
 

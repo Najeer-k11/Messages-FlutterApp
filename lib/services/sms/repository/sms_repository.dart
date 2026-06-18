@@ -248,6 +248,16 @@ class SmsRepository {
         .watch(fireImmediately: true);
   }
 
+  /// Get messages for a thread synchronously from local cache
+  List<MessageModel> getMessagesForThreadSync(String address) {
+    final normalized = normalizeAddress(address);
+    return isar.messageModels
+        .filter()
+        .threadAddressEqualTo(normalized)
+        .sortByTimestampDesc()
+        .findAllSync();
+  }
+
   /// Check if the app is the default SMS app
   Future<bool> isDefaultSmsApp() async {
     try {

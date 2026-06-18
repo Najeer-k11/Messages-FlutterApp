@@ -143,11 +143,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
             children: [
               Expanded(
                 child: StreamBuilder<List<MessageModel>>(
+                  initialData: context.read<SmsRepository>().getMessagesForThreadSync(
+                    widget.thread.address,
+                  ),
                   stream: context.read<SmsRepository>().watchMessagesForThread(
                     widget.thread.address,
                   ),
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
+                    if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
                     }
                     if (snapshot.hasError) {
