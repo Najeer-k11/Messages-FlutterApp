@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
 import 'package:msgs/features/inbox/bloc/inbox_bloc.dart';
 import 'package:msgs/features/inbox/bloc/inbox_event.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';
+import 'package:msgs/services/sms/repository/sms_repository.dart';
 
 class ThreadCard extends StatelessWidget {
   final ThreadModel thread;
@@ -20,6 +22,108 @@ class ThreadCard extends StatelessWidget {
     this.isSelected = false,
     this.isSelecting = false,
   });
+
+  void _showContextMenu(BuildContext context) {
+    HapticFeedback.mediumImpact();
+    final theme = Theme.of(context);
+    final hasUnread = thread.unreadCount > 0;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(
+                  thread.senderName,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Icon(
+                  hasUnread ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                title: Text(hasUnread ? 'Mark as read' : 'Mark as unread'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final repo = context.read<SmsRepository>();
+                  if (hasUnread) {
+                    await repo.markThreadAsRead(thread.address, thread.nativeThreadId);
+                  } else {
+                    await repo.markThreadAsUnread(thread.address);
+                  }
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.check_circle_outline, color: theme.colorScheme.primary),
+                title: const Text('Select'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onLongPress?.call();
+                },
+              ),
+                ListTile(
+                leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                title: Text('Delete', style: TextStyle(color: theme.colorScheme.error)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final inboxBloc = context.read<InboxBloc>();
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (d) => AlertDialog(
+                      title: const Text('Delete conversation?'),
+                      content: Text(
+                        'This will permanently delete all messages with ${thread.senderName}.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(d, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: theme.colorScheme.error,
+                            foregroundColor: theme.colorScheme.onError,
+                          ),
+                          onPressed: () => Navigator.pop(d, true),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    inboxBloc.add(DeleteThreadEvent(
+                      address: thread.address,
+                      nativeThreadId: thread.nativeThreadId,
+                    ));
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   String _formatTime(DateTime time) {
     final localTime = time.toLocal();
@@ -43,7 +147,9 @@ class ThreadCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
       child: InkWell(
         onTap: onTap,
-        onLongPress: onLongPress,
+        onLongPress: isSelecting
+            ? onLongPress // In selection mode: toggle select via parent
+            : () => _showContextMenu(context), // Normal mode: show context menu
         borderRadius: BorderRadius.circular(24.0),
         splashColor: theme.colorScheme.primary.withValues(alpha: 0.1),
         highlightColor: theme.colorScheme.primary.withValues(alpha: 0.05),
@@ -237,31 +343,39 @@ class ThreadCard extends StatelessWidget {
         ),
         if (hasUnread)
           Positioned(
-            right: 0,
-            bottom: 0,
-            child:
-                Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: theme.colorScheme.surface,
-                          width: 2,
-                        ),
-                      ),
-                    )
-                    .animate(
-                      onPlay: (controller) => controller.repeat(reverse: true),
-                    )
-                    .scale(
-                      begin: const Offset(1, 1),
-                      end: const Offset(1.2, 1.2),
-                      duration: 1.seconds,
-                      curve: Curves.easeInOut,
-                    )
-                    .tint(color: Colors.white, end: 0.3),
+            right: -2,
+            bottom: -2,
+            child: Container(
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: theme.colorScheme.surface,
+                      width: 2,
+                    ),
+                  ),
+                  child: Text(
+                    thread.unreadCount > 99 ? '99+' : '${thread.unreadCount}',
+                    style: TextStyle(
+                      color: theme.colorScheme.onPrimary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      height: 1.0,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+                .animate(
+                  onPlay: (controller) => controller.repeat(reverse: true),
+                )
+                .scale(
+                  begin: const Offset(1, 1),
+                  end: const Offset(1.08, 1.08),
+                  duration: 1200.ms,
+                  curve: Curves.easeInOut,
+                ),
           ),
       ],
     );

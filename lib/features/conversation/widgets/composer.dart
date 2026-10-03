@@ -16,7 +16,29 @@ class Composer extends StatefulWidget {
 
 class _ComposerState extends State<Composer> {
   final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   bool _hasText = false;
+
+  /// SMS character limits: 160 per segment for GSM-7, 153 for multi-part
+  static const int _singleSmsLimit = 160;
+  static const int _multipartSmsLimit = 153;
+
+  String get _charCountLabel {
+    final len = _controller.text.length;
+    if (len == 0) return '';
+    if (len <= _singleSmsLimit) {
+      return '${_singleSmsLimit - len}';
+    }
+    // Multi-part
+    final totalParts = ((len - _singleSmsLimit) / _multipartSmsLimit).ceil() + 1;
+    final remaining = (totalParts * _multipartSmsLimit) - (len - _singleSmsLimit);
+    return '$remaining/$totalParts';
+  }
+
+  bool get _showCharCount {
+    final len = _controller.text.length;
+    return len > 120; // Show counter when nearing the limit
+  }
 
   @override
   void initState() {
@@ -29,6 +51,11 @@ class _ComposerState extends State<Composer> {
       final hasText = _controller.text.isNotEmpty;
       if (_hasText != hasText) {
         setState(() => _hasText = hasText);
+      } else {
+        // Trigger rebuild for char counter
+        if (_showCharCount || _controller.text.length > 100) {
+          setState(() {});
+        }
       }
     });
   }
@@ -36,12 +63,14 @@ class _ComposerState extends State<Composer> {
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
   void _handleSend() {
-    if (_hasText) {
-      widget.onSend(_controller.text);
+    final text = _controller.text.trim();
+    if (text.isNotEmpty) {
+      widget.onSend(text);
       _controller.clear();
     }
   }
@@ -52,7 +81,7 @@ class _ComposerState extends State<Composer> {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -64,52 +93,62 @@ class _ComposerState extends State<Composer> {
                   color: theme.colorScheme.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(24.0),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.add_circle,
-                        color: theme.colorScheme.primary,
-                      ),
-                      onPressed: () {
-                        // ScaffoldMessenger.of(context).showSnackBar(
-                        //   SnackBar(content: Text('File sharing coming soon!')),
-                        // );
-                      },
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        minLines: 1,
-                        maxLines: 5,
-                        textInputAction: TextInputAction.newline,
-                        decoration: InputDecoration(
-                          hintText: 'Type a message',
-                          hintStyle: TextStyle(
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            Icons.add_circle_outline,
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 14.0,
+                          tooltip: 'Attach',
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Attachments coming soon'),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: _controller,
+                            focusNode: _focusNode,
+                            minLines: 1,
+                            maxLines: 6,
+                            textInputAction: TextInputAction.newline,
+                            keyboardType: TextInputType.multiline,
+                            decoration: InputDecoration(
+                              hintText: 'Type a message',
+                              hintStyle: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 12.0,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        if (_showCharCount)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8.0, bottom: 14.0),
+                            child: Text(
+                              _charCountLabel,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: _controller.text.length > _singleSmsLimit
+                                    ? theme.colorScheme.error
+                                    : theme.colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                    // if (!_hasText)
-                    //   IconButton(
-                    //     icon: Icon(
-                    //       Icons.camera_alt,
-                    //       color: theme.colorScheme.onSurfaceVariant,
-                    //     ),
-                    //     onPressed: () {
-                    //       ScaffoldMessenger.of(context).showSnackBar(
-                    //         SnackBar(
-                    //           content: Text('Camera feature coming soon!'),
-                    //         ),
-                    //       );
-                    //     },
-                    //   ),
                   ],
                 ),
               ),
@@ -128,14 +167,13 @@ class _ComposerState extends State<Composer> {
               ),
               child: IconButton(
                 icon: Icon(
-                  Icons.send,
+                  Icons.send_rounded,
                   color: _hasText
                       ? theme.colorScheme.onPrimary
                       : theme.colorScheme.onSurfaceVariant,
                 ),
-                onPressed: _hasText
-                    ? _handleSend
-                    : null, // Mic not implemented yet
+                onPressed: _hasText ? _handleSend : null,
+                tooltip: 'Send',
               ),
             ),
           ],

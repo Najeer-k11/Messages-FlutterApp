@@ -52,17 +52,48 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
   void _handleIntentData(Map<String, String> data) {
     final address = data['address'] ?? '';
     final body = data['body'] ?? '';
-    if (address.isNotEmpty || body.isNotEmpty) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ComposeScreen(
-            initialAddress: address,
-            initialBody: body,
-          ),
-        ),
-      );
+    if (address.isEmpty && body.isEmpty) return;
+
+    // If there's an address, check if a thread already exists → go directly to ConversationScreen
+    if (address.isNotEmpty) {
+      final normalizedAddress = SmsRepository.normalizeAddress(address);
+      if (context.read<InboxBloc>().state is InboxLoaded) {
+        final threads = (context.read<InboxBloc>().state as InboxLoaded).threads;
+
+        // Try normalized match first, then raw address fallback
+        final existingThread = threads.cast<ThreadModel?>().firstWhere(
+          (t) =>
+              t != null &&
+              (SmsRepository.normalizeAddress(t.address) == normalizedAddress ||
+                  t.address == address),
+          orElse: () => null,
+        );
+
+        if (existingThread != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ConversationScreen(
+                thread: existingThread,
+                initialBody: body.isNotEmpty ? body : null,
+              ),
+            ),
+          );
+          return;
+        }
+      }
     }
+
+    // Fallback: open compose screen for new/unknown numbers or addresses
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ComposeScreen(
+          initialAddress: address,
+          initialBody: body,
+        ),
+      ),
+    );
   }
 
   @override

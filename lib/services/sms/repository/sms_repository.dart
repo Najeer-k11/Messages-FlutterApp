@@ -366,6 +366,59 @@ class SmsRepository {
     });
   }
 
+  /// Mark a thread as unread — sets unreadCount = 1 and marks latest message as unread in Isar
+  Future<void> markThreadAsUnread(String address) async {
+    final normalized = normalizeAddress(address);
+    await isar.writeTxn(() async {
+      final thread = await isar.threadModels
+          .filter()
+          .addressEqualTo(normalized)
+          .findFirst();
+      if (thread != null) {
+        thread.unreadCount = 1;
+        await isar.threadModels.put(thread);
+      }
+      // Mark the latest received message as unread in local Isar
+      final latestReceived = await isar.messageModels
+          .filter()
+          .threadAddressEqualTo(normalized)
+          .isMeEqualTo(false)
+          .sortByTimestampDesc()
+          .findFirst();
+      if (latestReceived != null) {
+        latestReceived.isRead = false;
+        await isar.messageModels.put(latestReceived);
+      }
+    });
+  }
+
+  /// Search messages by body text — used for deep search in the search screen
+  Future<List<String>> searchMessageAddresses(String query) async {
+    if (query.isEmpty) return [];
+    try {
+      final messages = await isar.messageModels
+          .filter()
+          .bodyContains(query, caseSensitive: false)
+          .findAll();
+      return messages.map((m) => m.threadAddress).toSet().toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Get threads for a list of addresses — used by search screen for deep results
+  Future<List<ThreadModel>> getThreadsByAddresses(List<String> addresses) async {
+    final results = <ThreadModel>[];
+    for (final address in addresses) {
+      final thread = await isar.threadModels
+          .filter()
+          .addressEqualTo(address)
+          .findFirst();
+      if (thread != null) results.add(thread);
+    }
+    return results;
+  }
+
   /// Fetch device contacts via native MethodChannel
   Future<List<Map<String, String>>> getContacts() async {
     try {

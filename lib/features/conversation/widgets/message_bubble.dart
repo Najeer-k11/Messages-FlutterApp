@@ -592,7 +592,7 @@ class InstagramZoomOverlay extends StatelessWidget {
                       InkWell(
                         onTap: () {
                           HapticFeedback.lightImpact();
-                          Share.share(messageText);
+                          SharePlus.instance.share(ShareParams(text: messageText));
                           Navigator.pop(context);
                         },
                         borderRadius: const BorderRadius.horizontal(

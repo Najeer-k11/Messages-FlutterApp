@@ -61,10 +61,20 @@ class MainActivity: FlutterActivity() {
                     address = Uri.decode(ssp)
                 }
             }
+            // Notification deeplink: address passed as extra
+            if (address.isNullOrBlank()) {
+                address = intent.getStringExtra(SmsReceiver.EXTRA_SENDER)
+            }
         } else if (action == Intent.ACTION_SEND) {
             body = intent.getStringExtra(Intent.EXTRA_TEXT)
             address = intent.getStringExtra("android.intent.extra.PHONE_NUMBER")
                 ?: intent.getStringExtra(Intent.EXTRA_PHONE_NUMBER)
+        } else {
+            // Check for notification deeplink extra regardless of action
+            val notifSender = intent.getStringExtra(SmsReceiver.EXTRA_SENDER)
+            if (!notifSender.isNullOrBlank()) {
+                address = notifSender
+            }
         }
 
         if (address != null || body != null) {
@@ -498,32 +508,63 @@ class MainActivity: FlutterActivity() {
 
     private fun sendSms(address: String, body: String, result: MethodChannel.Result) {
         try {
-            val smsManager = SmsManager.getDefault()
+            val smsManager: SmsManager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                getSystemService(SmsManager::class.java) ?: SmsManager.getDefault()
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
+
+            // Write the message to the sent folder first to get an ID for status updates
+            val messageUri = writeSmsToSentFolder(context, address, body)
+            val messageId = messageUri?.lastPathSegment ?: ""
+
+            // Build sent/delivered PendingIntents for status tracking
+            val sentIntent = Intent(SmsStatusReceiver.ACTION_SMS_SENT).apply {
+                setClass(this@MainActivity, SmsStatusReceiver::class.java)
+                putExtra(SmsStatusReceiver.EXTRA_MESSAGE_ID, "sms_$messageId")
+            }
+            val deliveredIntent = Intent(SmsStatusReceiver.ACTION_SMS_DELIVERED).apply {
+                setClass(this@MainActivity, SmsStatusReceiver::class.java)
+                putExtra(SmsStatusReceiver.EXTRA_MESSAGE_ID, "sms_$messageId")
+            }
+            val requestCode = System.currentTimeMillis().toInt()
+            val sentPendingIntent = PendingIntent.getBroadcast(
+                this, requestCode, sentIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val deliveredPendingIntent = PendingIntent.getBroadcast(
+                this, requestCode + 1, deliveredIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
             val parts = smsManager.divideMessage(body)
             if (parts.size > 1) {
-                smsManager.sendMultipartTextMessage(address, null, parts, null, null)
+                val sentIntents = ArrayList<PendingIntent>(parts.size).also { list ->
+                    repeat(parts.size) { list.add(sentPendingIntent) }
+                }
+                smsManager.sendMultipartTextMessage(address, null, parts, sentIntents, null)
             } else {
-                smsManager.sendTextMessage(address, null, body, null, null)
+                smsManager.sendTextMessage(address, null, body, sentPendingIntent, deliveredPendingIntent)
             }
-            writeSmsToSentFolder(context, address, body)
             result.success(true)
         } catch (e: Exception) {
             result.error("SEND_SMS_ERROR", e.message, null)
         }
     }
 
-    private fun writeSmsToSentFolder(context: Context, address: String, body: String) {
-        try {
+    private fun writeSmsToSentFolder(context: Context, address: String, body: String): android.net.Uri? {
+        return try {
             val values = android.content.ContentValues().apply {
                 put(Telephony.Sms.ADDRESS, address)
                 put(Telephony.Sms.BODY, body)
                 put(Telephony.Sms.DATE, System.currentTimeMillis())
-                put(Telephony.Sms.READ, 1) // 1 = read
+                put(Telephony.Sms.READ, 1)
                 put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_SENT)
+                put("status", Telephony.Sms.STATUS_NONE) // pending
             }
             context.contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI, values)
-        } catch (e: Exception) {
-            // Ignore if write fails (e.g. not default SMS app)
-        }
+        } catch (_: Exception) { null }
     }
 }
+
