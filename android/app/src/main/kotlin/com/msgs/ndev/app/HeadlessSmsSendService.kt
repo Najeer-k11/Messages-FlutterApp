@@ -20,7 +20,7 @@ class HeadlessSmsSendService : Service() {
     override fun onBind(intent: Intent): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent != null && intent.action == Intent.ACTION_RESPOND_VIA_MESSAGE) {
+        if (intent != null && intent.action == "android.intent.action.RESPOND_VIA_MESSAGE") {
             val address = intent.data?.schemeSpecificPart?.trimStart('/')?.trim()
             val body = intent.getStringExtra(Intent.EXTRA_TEXT)
 

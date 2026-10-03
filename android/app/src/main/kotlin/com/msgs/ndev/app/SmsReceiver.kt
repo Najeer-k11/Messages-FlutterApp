@@ -268,7 +268,7 @@ class SmsReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .setContentIntent(summaryPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .putExtras(android.os.Bundle().apply { putBoolean("isGroupSummary", true) })
+            .addExtras(android.os.Bundle().apply { putBoolean("isGroupSummary", true) })
             .build()
 
         nm.notify(SUMMARY_NOTIFICATION_ID, summaryNotification)
