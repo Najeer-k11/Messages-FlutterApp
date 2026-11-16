@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# CI release keystore (decoded from the KEYSTORE_BASE64 secret); never commit it.
+/app/msgs

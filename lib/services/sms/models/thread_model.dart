@@ -16,4 +16,7 @@ class ThreadModel {
   late String lastMessage;
   late DateTime timestamp;
   int unreadCount = 0;
+
+  /// The last message carries a photo or other MMS media; the inbox shows a photo icon for it.
+  bool lastHasMedia = false;
 }

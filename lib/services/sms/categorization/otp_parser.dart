@@ -11,15 +11,26 @@ class OtpData {
 }
 
 class OtpParser {
-  // Common regex for 4 to 8 digit OTPs
-  static final RegExp _otpRegExp = RegExp(r'\b(?:\d{4,8})\b');
+  // Tried in order. The first match of a bare 4-8 digit number is the last resort: on its own it
+  // picks up years in dates ("16-11-2026"), amounts and account numbers before the actual code.
+  static final List<RegExp> _codePatterns = [
+    RegExp(r'\b(?:otp|code|pin|passcode|password)\b[^\d]{0,20}?\b(\d{4,8})\b', caseSensitive: false),
+    RegExp(r'\b(\d{4,8})\b\s*(?:is\s+(?:your|the|ur)|as\s+(?:your|the))', caseSensitive: false),
+    RegExp(r'(?:verify|verification|authenticate)[\s\S]{0,40}?\b(\d{4,8})\b', caseSensitive: false),
+    RegExp(r'\b(\d{4,8})\b'),
+  ];
 
   static OtpData? extract(String messageText, String sender) {
     // 1. Extract OTP
-    final match = _otpRegExp.firstMatch(messageText);
-    if (match == null) return null;
-    
-    final code = match.group(0)!;
+    String? code;
+    for (final pattern in _codePatterns) {
+      final match = pattern.firstMatch(messageText);
+      if (match != null) {
+        code = match.group(1);
+        break;
+      }
+    }
+    if (code == null) return null;
 
     // 2. Extract Service Name (Fallback to sender if not explicitly found in common patterns)
     String serviceName = _cleanSenderName(sender);

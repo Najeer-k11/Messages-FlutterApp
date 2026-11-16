@@ -1,11 +1,73 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:msgs/features/inbox/bloc/inbox_bloc.dart';
 import 'package:msgs/features/inbox/bloc/inbox_event.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';
 import 'package:msgs/services/sms/repository/sms_repository.dart';
+import 'package:msgs/ui/ui.dart';
+
+String _initial(String name) => name.trim().isNotEmpty ? name.trim().substring(0, 1).toUpperCase() : '?';
+
+/// Contact avatar. A plain circle normally; unread conversations get the Cookie9 "moment" in
+/// primary, and selection springs a check in on the same shape.
+class ThreadAvatar extends StatelessWidget {
+  const ThreadAvatar({
+    super.key,
+    required this.name,
+    this.size = 52,
+    this.unread = false,
+    this.selecting = false,
+    this.selected = false,
+  });
+
+  final String name;
+  final double size;
+  final bool unread;
+  final bool selecting;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    if (selecting) {
+      return SizedBox.square(
+        dimension: size,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 160),
+          child: selected
+              ? SpringIn(
+                  key: const ValueKey('on'),
+                  child: ShapeBox(
+                    size: size,
+                    shape: CookieBorder.cookie9,
+                    color: c.primary,
+                    child: Icon(Icons.check_rounded, color: c.onPrimary, size: size * .5),
+                  ),
+                )
+              : Container(
+                  key: const ValueKey('off'),
+                  decoration: ShapeDecoration(
+                    shape: CircleBorder(side: BorderSide(color: c.outline, width: 2)),
+                  ),
+                  margin: EdgeInsets.all(size * .16),
+                ),
+        ),
+      );
+    }
+    final style = (size >= 48 ? context.type.titleLargeEmphasized : context.type.titleMediumEmphasized);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: unread ? 1 : 0),
+      duration: Motion.colour,
+      builder: (context, t, _) => ShapeBox(
+        size: size,
+        shape: unread ? CookieBorder.cookie9 : Shapes.circle,
+        color: Color.lerp(c.primaryContainer, c.primary, t)!,
+        child: Text(_initial(name), style: style.copyWith(color: Color.lerp(c.onPrimaryContainer, c.onPrimary, t))),
+      ),
+    );
+  }
+}
 
 class ThreadCard extends StatelessWidget {
   final ThreadModel thread;
@@ -14,6 +76,9 @@ class ThreadCard extends StatelessWidget {
   final bool isSelected;
   final bool isSelecting;
 
+  /// Swipe-to-delete. Off where deleting would be surprising (search results).
+  final bool dismissible;
+
   const ThreadCard({
     super.key,
     required this.thread,
@@ -21,363 +86,244 @@ class ThreadCard extends StatelessWidget {
     this.onLongPress,
     this.isSelected = false,
     this.isSelecting = false,
+    this.dismissible = true,
   });
 
-  void _showContextMenu(BuildContext context) {
-    HapticFeedback.mediumImpact();
-    final theme = Theme.of(context);
-    final hasUnread = thread.unreadCount > 0;
+  Future<bool> _confirmDelete(BuildContext context) => showConfirmDialog(
+    context,
+    title: 'Delete conversation?',
+    message: 'This will permanently delete all messages with ${thread.senderName}.',
+    confirmLabel: 'Delete',
+  );
 
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 36, height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+  void _showDetails(BuildContext context) {
+    HapticFeedback.mediumImpact();
+    final hasUnread = thread.unreadCount > 0;
+    final repo = context.read<SmsRepository>();
+    final inboxBloc = context.read<InboxBloc>();
+
+    showExpressiveSheet<void>(
+      context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DetailsHeader(
+              badge: ShapeBox(
+                size: 52,
+                shape: CookieBorder.cookie7,
+                color: ctx.colors.primaryContainer,
                 child: Text(
-                  thread.senderName,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  _initial(thread.senderName),
+                  style: ctx.type.titleLargeEmphasized.copyWith(color: ctx.colors.onPrimaryContainer),
                 ),
               ),
-              const Divider(height: 1),
-              ListTile(
-                leading: Icon(
-                  hasUnread ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined,
-                  color: theme.colorScheme.primary,
+              title: thread.senderName,
+              subtitle: thread.senderName == thread.address ? null : thread.address,
+            ),
+            SheetGroup(
+              children: [
+                SheetActionRow(
+                  icon: hasUnread ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined,
+                  title: hasUnread ? 'Mark as read' : 'Mark as unread',
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    if (hasUnread) {
+                      await repo.markThreadAsRead(thread.address, thread.nativeThreadId);
+                    } else {
+                      await repo.markThreadAsUnread(thread.address, thread.nativeThreadId);
+                    }
+                  },
                 ),
-                title: Text(hasUnread ? 'Mark as read' : 'Mark as unread'),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final repo = context.read<SmsRepository>();
-                  if (hasUnread) {
-                    await repo.markThreadAsRead(thread.address, thread.nativeThreadId);
-                  } else {
-                    await repo.markThreadAsUnread(thread.address);
-                  }
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.check_circle_outline, color: theme.colorScheme.primary),
-                title: const Text('Select'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  onLongPress?.call();
-                },
-              ),
-                ListTile(
-                leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
-                title: Text('Delete', style: TextStyle(color: theme.colorScheme.error)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final inboxBloc = context.read<InboxBloc>();
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (d) => AlertDialog(
-                      title: const Text('Delete conversation?'),
-                      content: Text(
-                        'This will permanently delete all messages with ${thread.senderName}.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(d, false),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: theme.colorScheme.error,
-                            foregroundColor: theme.colorScheme.onError,
-                          ),
-                          onPressed: () => Navigator.pop(d, true),
-                          child: const Text('Delete'),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirmed == true) {
-                    inboxBloc.add(DeleteThreadEvent(
-                      address: thread.address,
-                      nativeThreadId: thread.nativeThreadId,
-                    ));
-                  }
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
+                const SettingsDivider(),
+                SheetActionRow(
+                  icon: Icons.check_circle_outline_rounded,
+                  title: 'Select',
+                  subtitle: 'Pick several conversations at once',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    onLongPress?.call();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            BigActionButton(
+              text: 'Delete conversation',
+              icon: Icons.delete_outline_rounded,
+              container: ctx.colors.errorContainer,
+              content: ctx.colors.onErrorContainer,
+              onTap: () async {
+                Navigator.pop(ctx);
+                if (await _confirmDelete(context)) {
+                  inboxBloc.add(DeleteThreadEvent(address: thread.address, nativeThreadId: thread.nativeThreadId));
+                }
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   String _formatTime(DateTime time) {
-    final localTime = time.toLocal();
+    final local = time.toLocal();
     final now = DateTime.now();
-    final diff = now.difference(localTime);
-    if (diff.inDays == 0) {
-      return "${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}";
-    } else if (diff.inDays == 1) {
-      return "Yesterday";
-    } else {
-      return "${localTime.day}/${localTime.month}";
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(local.year, local.month, local.day);
+    final days = today.difference(day).inDays;
+    if (days == 0) {
+      return "${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}";
     }
+    if (days == 1) return 'Yesterday';
+    return '${local.day}/${local.month}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bool hasUnread = thread.unreadCount > 0;
+    final c = context.colors;
+    final hasUnread = thread.unreadCount > 0;
+    final tileColor = isSelected ? c.primaryContainer : context.groupContainer.withValues(alpha: .94);
 
-    Widget card = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: isSelecting
-            ? onLongPress // In selection mode: toggle select via parent
-            : () => _showContextMenu(context), // Normal mode: show context menu
-        borderRadius: BorderRadius.circular(24.0),
-        splashColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-        highlightColor: theme.colorScheme.primary.withValues(alpha: 0.05),
-        child: Container(
-          decoration: isSelected
-              ? BoxDecoration(
-                  color: theme.colorScheme.primaryContainer.withValues(
-                    alpha: 0.4,
-                  ),
-                  borderRadius: BorderRadius.circular(24.0),
-                )
-              : null,
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Avatar or checkbox
-              if (isSelecting)
-                _buildSelectionIndicator(theme)
-              else
-                _buildAvatar(theme, hasUnread),
-              const SizedBox(width: 16),
-              // Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Hero(
-                            tag: 'name_${thread.id}',
-                            child: Material(
-                              color: Colors.transparent,
-                              child: Text(
-                                thread.senderName,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: hasUnread
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
+    final card = LuminousElastic.tile(
+      onTap: onTap,
+      onLongPress: isSelecting ? onLongPress : () => _showDetails(context),
+      child: AnimatedContainer(
+        duration: Motion.colour,
+        padding: const EdgeInsets.fromLTRB(14, 14, 18, 14),
+        decoration: ShapeDecoration(
+          color: tileColor,
+          shape: Shapes.tile.copyWith(
+            side: BorderSide(
+              color: isSelected ? c.primary.withValues(alpha: .5) : c.outlineVariant.withValues(alpha: .35),
+              width: 1.25,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Hero(
+              tag: 'avatar_${thread.id}',
+              child: ThreadAvatar(
+                name: thread.senderName,
+                unread: hasUnread,
+                selecting: isSelecting,
+                selected: isSelected,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          thread.senderName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: (hasUnread ? context.type.titleMediumEmphasized : context.text.titleMedium)?.copyWith(
+                            color: c.onSurface,
                           ),
                         ),
-                        Text(
-                          _formatTime(thread.timestamp),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: hasUnread
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurfaceVariant,
-                            fontWeight: hasUnread
-                                ? FontWeight.bold
-                                : FontWeight.normal,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatTime(thread.timestamp),
+                        style: (hasUnread ? context.type.labelMediumEmphasized : context.text.labelMedium)?.copyWith(
+                          color: hasUnread ? c.primary : c.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: _Preview(thread: thread, unread: hasUnread),
+                      ),
+                      if (hasUnread) ...[
+                        const SizedBox(width: 10),
+                        Container(
+                          constraints: const BoxConstraints(minWidth: 24),
+                          height: 24,
+                          padding: const EdgeInsets.symmetric(horizontal: 7),
+                          alignment: Alignment.center,
+                          decoration: ShapeDecoration(shape: const StadiumBorder(), color: c.primary),
+                          child: Text(
+                            thread.unreadCount > 99 ? '99+' : '${thread.unreadCount}',
+                            style: context.type.labelMediumEmphasized.copyWith(color: c.onPrimary, height: 1),
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      thread.lastMessage,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: hasUnread
-                            ? theme.colorScheme.onSurface
-                            : theme.colorScheme.onSurfaceVariant,
-                        fontWeight: hasUnread
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
 
-    // Disable swipe-to-dismiss when in selection mode
-    if (isSelecting) {
-      return card;
-    }
+    final padded = Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: card);
+    if (isSelecting || !dismissible) return padded;
 
     return Dismissible(
       key: Key('thread_${thread.address}'),
       direction: DismissDirection.endToStart,
-      confirmDismiss: (direction) async {
-        return await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Delete conversation?'),
-                content: Text(
-                  'This will permanently delete all messages with ${thread.senderName}.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(false),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: theme.colorScheme.error,
-                      foregroundColor: theme.colorScheme.onError,
-                    ),
-                    onPressed: () => Navigator.of(ctx).pop(true),
-                    child: const Text('Delete'),
-                  ),
-                ],
-              ),
-            ) ??
-            false;
-      },
-      onDismissed: (_) {
-        context.read<InboxBloc>().add(
-          DeleteThreadEvent(
-            address: thread.address,
-            nativeThreadId: thread.nativeThreadId,
-          ),
-        );
-      },
+      confirmDismiss: (_) => _confirmDelete(context),
+      onDismissed: (_) => context.read<InboxBloc>().add(
+        DeleteThreadEvent(address: thread.address, nativeThreadId: thread.nativeThreadId),
+      ),
       background: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.errorContainer,
-          borderRadius: BorderRadius.circular(24.0),
-        ),
+        margin: const EdgeInsets.symmetric(vertical: 5),
+        decoration: ShapeDecoration(shape: Shapes.tile, color: c.errorContainer),
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24.0),
-        child: Icon(
-          Icons.delete_outline_rounded,
-          color: theme.colorScheme.onErrorContainer,
-          size: 28,
-        ),
+        padding: const EdgeInsets.only(right: 24),
+        child: Icon(Icons.delete_outline_rounded, color: c.onErrorContainer, size: 28),
       ),
-      child: card,
+      child: padded,
     );
   }
+}
 
-  Widget _buildSelectionIndicator(ThemeData theme) {
-    return SizedBox(
-      width: 52,
-      height: 52,
-      child: Center(
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isSelected ? theme.colorScheme.primary : Colors.transparent,
-            border: Border.all(
-              color: isSelected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.outline,
-              width: 2,
+/// Last-message preview. Photo messages get a photo icon (and "Photo" when there is no caption)
+/// rather than an emoji, so the glyph follows the theme colour and the type scale.
+class _Preview extends StatelessWidget {
+  const _Preview({required this.thread, required this.unread});
+
+  final ThreadModel thread;
+  final bool unread;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final color = unread ? c.onSurface : c.onSurfaceVariant;
+    final style = (unread ? context.type.bodyMediumEmphasized : context.text.bodyMedium)?.copyWith(color: color);
+    final text = thread.lastMessage.isNotEmpty ? thread.lastMessage : (thread.lastHasMedia ? 'Photo' : '');
+    if (!thread.lastHasMedia) {
+      return Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: style);
+    }
+    return Text.rich(
+      TextSpan(
+        children: [
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(Icons.photo_outlined, size: 18, color: color),
             ),
           ),
-          child: isSelected
-              ? Icon(Icons.check, size: 18, color: theme.colorScheme.onPrimary)
-              : null,
-        ),
+          TextSpan(text: text),
+        ],
       ),
-    );
-  }
-
-  Widget _buildAvatar(ThemeData theme, bool hasUnread) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Hero(
-          tag: 'avatar_${thread.id}',
-          child: CircleAvatar(
-            radius: 26,
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: Text(
-              thread.senderName.isNotEmpty
-                  ? thread.senderName.substring(0, 1).toUpperCase()
-                  : '?',
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer,
-              ),
-            ),
-          ),
-        ),
-        if (hasUnread)
-          Positioned(
-            right: -2,
-            bottom: -2,
-            child: Container(
-                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: theme.colorScheme.surface,
-                      width: 2,
-                    ),
-                  ),
-                  child: Text(
-                    thread.unreadCount > 99 ? '99+' : '${thread.unreadCount}',
-                    style: TextStyle(
-                      color: theme.colorScheme.onPrimary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      height: 1.0,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-                .animate(
-                  onPlay: (controller) => controller.repeat(reverse: true),
-                )
-                .scale(
-                  begin: const Offset(1, 1),
-                  end: const Offset(1.08, 1.08),
-                  duration: 1200.ms,
-                  curve: Curves.easeInOut,
-                ),
-          ),
-      ],
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: style,
     );
   }
 }

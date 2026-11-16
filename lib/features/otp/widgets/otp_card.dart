@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:msgs/services/sms/categorization/otp_parser.dart';
+import 'package:msgs/ui/ui.dart';
 
+/// A one-time code. OTPs are "not yours" content, so they use the tertiary family.
 class OtpCard extends StatelessWidget {
   final OtpData otpData;
 
@@ -9,88 +11,72 @@ class OtpCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      width: 160,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () {
-            Clipboard.setData(ClipboardData(text: otpData.code));
-            // ScaffoldMessenger.of(context).showSnackBar(
-            //   SnackBar(
-            //     content: Text('Copied ${otpData.code} to clipboard'),
-            //     behavior: SnackBarBehavior.floating,
-            //   ),
-            // );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        otpData.serviceName,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+    final c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: LuminousElastic.tile(
+        semanticLabel: 'Copy code ${otpData.code} from ${otpData.serviceName}',
+        onTap: () {
+          HapticFeedback.lightImpact();
+          Clipboard.setData(ClipboardData(text: otpData.code));
+          showExpressiveSnack(context, 'Copied ${otpData.code}', aboveDock: true);
+        },
+        child: Container(
+          width: 172,
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          decoration: ShapeDecoration(shape: Shapes.tile, color: c.tertiaryContainer),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  ShapeBox(
+                    size: 30,
+                    shape: CookieBorder.cookie4,
+                    color: c.tertiary,
+                    child: Icon(Icons.key_rounded, size: 16, color: c.onTertiary),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      otpData.serviceName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.type.labelLargeEmphasized.copyWith(color: c.onTertiaryContainer),
                     ),
-                    Icon(
-                      Icons.copy,
-                      size: 16,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ],
-                ),
-                Text(
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
                   otpData.code,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2.0,
-                    color: theme.colorScheme.primary,
-                  ),
+                  style: context.type.headlineMediumEmphasized.copyWith(color: c.onTertiaryContainer, letterSpacing: 2),
                 ),
-                if (otpData.validity != null)
-                  Text(
-                    'Valid for ${otpData.validity!.inMinutes} mins',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
-                      fontSize: 10,
-                    ),
-                  )
-                else
-                  Text(
-                    'Tap to copy',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontSize: 10,
-                    ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Icon(
+                    otpData.validity != null ? Icons.timer_outlined : Icons.content_copy_rounded,
+                    size: 14,
+                    color: c.onTertiaryContainer.withValues(alpha: .75),
                   ),
-              ],
-            ),
+                  const SizedBox(width: 4),
+                  Text(
+                    otpData.validity != null ? _remaining(otpData.validity!) : 'Tap to copy',
+                    style: context.text.labelMedium?.copyWith(color: c.onTertiaryContainer.withValues(alpha: .75)),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+
+  static String _remaining(Duration d) => d.inMinutes < 1 ? 'Expires soon' : '${d.inMinutes} min left';
 }

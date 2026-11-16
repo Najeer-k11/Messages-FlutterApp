@@ -99,6 +99,21 @@
             </intent-filter>
         </receiver>
 
+        <!-- MMS send/download completion (see MmsSender, MmsReceiver) -->
+        <receiver android:name=".MmsStatusReceiver"
+            android:exported="false" />
+
+        <!-- Exposes MMS PDU files to the platform MMS service -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.mmsfiles"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/mms_file_paths" />
+        </provider>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

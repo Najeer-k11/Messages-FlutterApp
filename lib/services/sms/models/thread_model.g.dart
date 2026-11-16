@@ -7,7 +7,7 @@ part of 'thread_model.dart';
 // **************************************************************************
 
 // coverage:ignore-file
-// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
+// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types, experimental_member_use
 
 extension GetThreadModelCollection on Isar {
   IsarCollection<ThreadModel> get threadModels => this.collection();
@@ -18,28 +18,33 @@ const ThreadModelSchema = CollectionSchema(
   id: -1364098944990894277,
   properties: {
     r'address': PropertySchema(id: 0, name: r'address', type: IsarType.string),
-    r'lastMessage': PropertySchema(
+    r'lastHasMedia': PropertySchema(
       id: 1,
+      name: r'lastHasMedia',
+      type: IsarType.bool,
+    ),
+    r'lastMessage': PropertySchema(
+      id: 2,
       name: r'lastMessage',
       type: IsarType.string,
     ),
     r'nativeThreadId': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'nativeThreadId',
       type: IsarType.string,
     ),
     r'senderName': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'senderName',
       type: IsarType.string,
     ),
     r'timestamp': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'unreadCount': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'unreadCount',
       type: IsarType.long,
     ),
@@ -71,7 +76,7 @@ const ThreadModelSchema = CollectionSchema(
   getId: _threadModelGetId,
   getLinks: _threadModelGetLinks,
   attach: _threadModelAttach,
-  version: '3.3.2',
+  version: '3.4.1',
 );
 
 int _threadModelEstimateSize(
@@ -94,11 +99,12 @@ void _threadModelSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.address);
-  writer.writeString(offsets[1], object.lastMessage);
-  writer.writeString(offsets[2], object.nativeThreadId);
-  writer.writeString(offsets[3], object.senderName);
-  writer.writeDateTime(offsets[4], object.timestamp);
-  writer.writeLong(offsets[5], object.unreadCount);
+  writer.writeBool(offsets[1], object.lastHasMedia);
+  writer.writeString(offsets[2], object.lastMessage);
+  writer.writeString(offsets[3], object.nativeThreadId);
+  writer.writeString(offsets[4], object.senderName);
+  writer.writeDateTime(offsets[5], object.timestamp);
+  writer.writeLong(offsets[6], object.unreadCount);
 }
 
 ThreadModel _threadModelDeserialize(
@@ -110,11 +116,12 @@ ThreadModel _threadModelDeserialize(
   final object = ThreadModel();
   object.address = reader.readString(offsets[0]);
   object.id = id;
-  object.lastMessage = reader.readString(offsets[1]);
-  object.nativeThreadId = reader.readString(offsets[2]);
-  object.senderName = reader.readString(offsets[3]);
-  object.timestamp = reader.readDateTime(offsets[4]);
-  object.unreadCount = reader.readLong(offsets[5]);
+  object.lastHasMedia = reader.readBool(offsets[1]);
+  object.lastMessage = reader.readString(offsets[2]);
+  object.nativeThreadId = reader.readString(offsets[3]);
+  object.senderName = reader.readString(offsets[4]);
+  object.timestamp = reader.readDateTime(offsets[5]);
+  object.unreadCount = reader.readLong(offsets[6]);
   return object;
 }
 
@@ -128,14 +135,16 @@ P _threadModelDeserializeProp<P>(
     case 0:
       return (reader.readString(offset)) as P;
     case 1:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 2:
       return (reader.readString(offset)) as P;
     case 3:
       return (reader.readString(offset)) as P;
     case 4:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 5:
+      return (reader.readDateTime(offset)) as P;
+    case 6:
       return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -555,6 +564,15 @@ extension ThreadModelQueryFilter
           upper: upper,
           includeUpper: includeUpper,
         ),
+      );
+    });
+  }
+
+  QueryBuilder<ThreadModel, ThreadModel, QAfterFilterCondition>
+  lastHasMediaEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'lastHasMedia', value: value),
       );
     });
   }
@@ -1113,6 +1131,19 @@ extension ThreadModelQuerySortBy
     });
   }
 
+  QueryBuilder<ThreadModel, ThreadModel, QAfterSortBy> sortByLastHasMedia() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastHasMedia', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ThreadModel, ThreadModel, QAfterSortBy>
+  sortByLastHasMediaDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastHasMedia', Sort.desc);
+    });
+  }
+
   QueryBuilder<ThreadModel, ThreadModel, QAfterSortBy> sortByLastMessage() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'lastMessage', Sort.asc);
@@ -1201,6 +1232,19 @@ extension ThreadModelQuerySortThenBy
     });
   }
 
+  QueryBuilder<ThreadModel, ThreadModel, QAfterSortBy> thenByLastHasMedia() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastHasMedia', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ThreadModel, ThreadModel, QAfterSortBy>
+  thenByLastHasMediaDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastHasMedia', Sort.desc);
+    });
+  }
+
   QueryBuilder<ThreadModel, ThreadModel, QAfterSortBy> thenByLastMessage() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'lastMessage', Sort.asc);
@@ -1273,6 +1317,12 @@ extension ThreadModelQueryWhereDistinct
     });
   }
 
+  QueryBuilder<ThreadModel, ThreadModel, QDistinct> distinctByLastHasMedia() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'lastHasMedia');
+    });
+  }
+
   QueryBuilder<ThreadModel, ThreadModel, QDistinct> distinctByLastMessage({
     bool caseSensitive = true,
   }) {
@@ -1324,6 +1374,12 @@ extension ThreadModelQueryProperty
   QueryBuilder<ThreadModel, String, QQueryOperations> addressProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'address');
+    });
+  }
+
+  QueryBuilder<ThreadModel, bool, QQueryOperations> lastHasMediaProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'lastHasMedia');
     });
   }
 

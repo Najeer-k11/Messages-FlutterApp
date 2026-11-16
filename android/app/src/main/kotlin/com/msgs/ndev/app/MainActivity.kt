@@ -25,9 +25,13 @@ import kotlinx.coroutines.withContext
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.msgs.ndevmsgs/sms"
+    private val WALLPAPER_CHANNEL = "com.msgs.ndevmsgs/wallpaper"
     private var methodChannel: MethodChannel? = null
     private var smsObserver: ContentObserver? = null
     private var pendingIntentData: Map<String, String>? = null
+    private var pendingPick: MethodChannel.Result? = null
+    private val PICK_MEDIA_REQUEST = 4101
+    private val MAX_ATTACHMENTS = 3
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,6 +93,7 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun onDestroy() {
+        MmsStatusReceiver.onSendResult = null
         unregisterSmsObserver()
         super.onDestroy()
     }
@@ -101,11 +106,9 @@ class MainActivity: FlutterActivity() {
                 methodChannel?.invokeMethod("onSmsReceived", null)
             }
         }
-        contentResolver.registerContentObserver(
-            Uri.parse("content://sms"),
-            true,
-            smsObserver!!
-        )
+        contentResolver.registerContentObserver(Uri.parse("content://sms"), true, smsObserver!!)
+        // MMS changes too: sent/failed status updates and downloaded incoming MMS.
+        contentResolver.registerContentObserver(Uri.parse("content://mms"), true, smsObserver!!)
     }
 
     private fun unregisterSmsObserver() {
@@ -117,11 +120,47 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WALLPAPER_CHANNEL).setMethodCallHandler { call, result ->
+            if (call.method == "getColors") result.success(MaterialYouColors.read(this)) else result.notImplemented()
+        }
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         methodChannel = channel
+        MmsStatusReceiver.onSendResult = { ok ->
+            runOnUiThread { methodChannel?.invokeMethod("onMmsSendResult", ok) }
+        }
         channel.setMethodCallHandler {
             call, result ->
             when (call.method) {
+                "pickMedia" -> pickMedia(result)
+                "sendMms" -> {
+                    val address = call.argument<String>("address")
+                    val text = call.argument<String>("body")
+                    val uris = call.argument<List<String>>("attachments").orEmpty().map(Uri::parse)
+                    if (address == null) {
+                        result.error("INVALID_ARGS", "address is null", null)
+                        return@setMethodCallHandler
+                    }
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            MmsSender.send(this@MainActivity, address, text, uris)
+                            withContext(Dispatchers.Main) { result.success(true) }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) { result.error("SEND_MMS_ERROR", e.message, null) }
+                        }
+                    }
+                }
+                "readMedia" -> {
+                    val uri = call.argument<String>("uri")?.let(Uri::parse)
+                    val maxSide = call.argument<Int>("maxSide") ?: 1080
+                    if (uri == null) {
+                        result.error("INVALID_ARGS", "uri is null", null)
+                        return@setMethodCallHandler
+                    }
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val bytes = try { readMedia(uri, maxSide) } catch (_: Exception) { null }
+                        withContext(Dispatchers.Main) { result.success(bytes) }
+                    }
+                }
                 "getPendingIntentData" -> {
                     result.success(pendingIntentData)
                     pendingIntentData = null
@@ -150,11 +189,11 @@ class MainActivity: FlutterActivity() {
                     }
                 }
                 "isDefaultSmsApp" -> {
-                    val isDefault = Telephony.Sms.getDefaultSmsPackage(context) == packageName
+                    val isDefault = DefaultSmsApp.isDefault(this)
                     result.success(isDefault)
                 }
                 "requestDefaultSmsApp" -> {
-                    if (Telephony.Sms.getDefaultSmsPackage(context) == packageName) {
+                    if (DefaultSmsApp.isDefault(this)) {
                         result.success(true)
                         return@setMethodCallHandler
                     }
@@ -222,6 +261,7 @@ class MainActivity: FlutterActivity() {
                         result.error("INVALID_ARGS", "threadId is null", null)
                         return@setMethodCallHandler
                     }
+                    call.argument<String>("address")?.let { cancelNotificationFor(it) }
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
                             markThreadAsRead(threadId)
@@ -233,6 +273,49 @@ class MainActivity: FlutterActivity() {
                                 result.error("MARK_READ_ERROR", e.message, null)
                             }
                         }
+                    }
+                }
+                "markThreadAsUnread" -> {
+                    val threadId = call.argument<String>("threadId")
+                    if (threadId == null) {
+                        result.error("INVALID_ARGS", "threadId is null", null)
+                        return@setMethodCallHandler
+                    }
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val ok = try { markThreadAsUnread(threadId) } catch (_: Exception) { false }
+                        withContext(Dispatchers.Main) { result.success(ok) }
+                    }
+                }
+                "findContact" -> {
+                    // Lookup URI of the saved contact for this number, or null if it isn't saved.
+                    val phone = call.argument<String>("phone").orEmpty()
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val uri = try { contactLookupUri(phone) } catch (_: Exception) { null }
+                        withContext(Dispatchers.Main) { result.success(uri) }
+                    }
+                }
+                "openContact" -> {
+                    val uri = call.argument<String>("uri")
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("OPEN_CONTACT_ERROR", e.message, null)
+                    }
+                }
+                "addContact" -> {
+                    val phone = call.argument<String>("phone")
+                    try {
+                        val intent = Intent(ContactsContract.Intents.Insert.ACTION).apply {
+                            type = ContactsContract.RawContacts.CONTENT_TYPE
+                            putExtra(ContactsContract.Intents.Insert.PHONE, phone)
+                            // Return to Messages after saving rather than staying in Contacts.
+                            putExtra("finishActivityOnSaveCompleted", true)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("ADD_CONTACT_ERROR", e.message, null)
                     }
                 }
                 "getContacts" -> {
@@ -253,6 +336,17 @@ class MainActivity: FlutterActivity() {
                     result.notImplemented()
                 }
             }
+        }
+    }
+
+    /** Contacts lookup URI for [phoneNumber], matched the way the dialer matches numbers. */
+    private fun contactLookupUri(phoneNumber: String): String? {
+        if (phoneNumber.isBlank()) return null
+        val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phoneNumber))
+        val projection = arrayOf(ContactsContract.PhoneLookup._ID, ContactsContract.PhoneLookup.LOOKUP_KEY)
+        return contentResolver.query(uri, projection, null, null, null)?.use { c ->
+            if (!c.moveToFirst()) return@use null
+            ContactsContract.Contacts.getLookupUri(c.getLong(0), c.getString(1))?.toString()
         }
     }
 
@@ -306,15 +400,15 @@ class MainActivity: FlutterActivity() {
         return if (address.isBlank() || address.contains("insert-address")) "Unknown" else address
     }
 
-    private fun getMmsBody(mmsId: String): String {
+    /** Text body and media parts ("content://mms/part/<id>|<mime>") of one MMS. */
+    private fun getMmsContent(mmsId: String): Pair<String, List<String>> {
         val uri = Uri.parse("content://mms/part")
-        val projection = arrayOf("ct", "text")
-        val selection = "mid = ?"
-        val selectionArgs = arrayOf(mmsId)
+        val projection = arrayOf("_id", "ct", "text")
         var body = ""
-        var hasMedia = false
+        val media = mutableListOf<String>()
         try {
-            contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
+            contentResolver.query(uri, projection, "mid = ?", arrayOf(mmsId), null)?.use { cursor ->
+                val idIdx = cursor.getColumnIndexOrThrow("_id")
                 val ctIdx = cursor.getColumnIndexOrThrow("ct")
                 val textIdx = cursor.getColumnIndexOrThrow("text")
                 while (cursor.moveToNext()) {
@@ -322,17 +416,12 @@ class MainActivity: FlutterActivity() {
                     if (ct == "text/plain") {
                         body = cursor.getString(textIdx) ?: ""
                     } else if (ct.startsWith("image/") || ct.startsWith("video/") || ct.startsWith("audio/")) {
-                        hasMedia = true
+                        media.add("content://mms/part/${cursor.getString(idIdx)}|$ct")
                     }
                 }
             }
-        } catch (e: Exception) {
-            // Ignore
-        }
-        if (body.isEmpty() && hasMedia) {
-            return "[Multimedia Message]"
-        }
-        return body
+        } catch (_: Exception) {}
+        return body to media
     }
 
     private fun getAllSms(): List<Map<String, Any>> {
@@ -399,12 +488,13 @@ class MainActivity: FlutterActivity() {
                     val mmsId = cursor.getString(idIdx)
                     val msgBox = cursor.getInt(msgBoxIdx)
                     val address = getMmsAddress(mmsId, msgBox)
-                    val body = getMmsBody(mmsId)
+                    val (body, media) = getMmsContent(mmsId)
                     val date = cursor.getLong(dateIdx)
                     combinedList.add(mapOf(
                         "id" to "mms_" + mmsId,
                         "address" to address,
                         "body" to body,
+                        "media" to media,
                         "date" to (date * 1000), // MMS dates are in seconds
                         "type" to msgBox,
                         "read" to cursor.getInt(readIdx),
@@ -480,6 +570,94 @@ class MainActivity: FlutterActivity() {
                 arrayOf(threadId)
             )
         } catch (_: Exception) {}
+    }
+
+    /** System photo picker (no storage permission needed); returns up to [MAX_ATTACHMENTS] Uris. */
+    private fun pickMedia(result: MethodChannel.Result) {
+        pendingPick?.success(emptyList<String>())
+        pendingPick = result
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Intent(android.provider.MediaStore.ACTION_PICK_IMAGES).apply {
+                type = "image/*"
+                putExtra(android.provider.MediaStore.EXTRA_PICK_IMAGES_MAX, MAX_ATTACHMENTS)
+            }
+        } else {
+            Intent(Intent.ACTION_GET_CONTENT).apply {
+                type = "image/*"
+                addCategory(Intent.CATEGORY_OPENABLE)
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            }
+        }
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, PICK_MEDIA_REQUEST)
+        } catch (e: Exception) {
+            pendingPick = null
+            result.error("PICK_ERROR", e.message, null)
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PICK_MEDIA_REQUEST) return
+        val uris = mutableListOf<String>()
+        if (resultCode == RESULT_OK && data != null) {
+            val clip = data.clipData
+            if (clip != null) {
+                for (i in 0 until minOf(clip.itemCount, MAX_ATTACHMENTS)) uris.add(clip.getItemAt(i).uri.toString())
+            } else {
+                data.data?.let { uris.add(it.toString()) }
+            }
+        }
+        pendingPick?.success(uris)
+        pendingPick = null
+    }
+
+    /** JPEG bytes of an image Uri (picker or MMS part), downscaled to [maxSide]. */
+    private fun readMedia(uri: Uri, maxSide: Int): ByteArray? {
+        val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            android.graphics.ImageDecoder.decodeBitmap(
+                android.graphics.ImageDecoder.createSource(contentResolver, uri)
+            ) { decoder, info, _ ->
+                val longest = maxOf(info.size.width, info.size.height)
+                if (longest > maxSide) {
+                    val s = maxSide.toFloat() / longest
+                    decoder.setTargetSize((info.size.width * s).toInt().coerceAtLeast(1), (info.size.height * s).toInt().coerceAtLeast(1))
+                }
+                decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        } else {
+            contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it) } ?: return null
+        }
+        val out = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, out)
+        return out.toByteArray()
+    }
+
+    /**
+     * Marks the newest received message of a thread unread in the provider, so "Mark as unread"
+     * survives the next full sync. Only takes effect when we are the default SMS app.
+     */
+    private fun markThreadAsUnread(threadId: String): Boolean {
+        val uri = Uri.parse("content://sms/inbox")
+        val latestId = contentResolver.query(
+            uri, arrayOf(Telephony.Sms._ID), "thread_id = ?", arrayOf(threadId),
+            "${Telephony.Sms.DATE} DESC LIMIT 1"
+        )?.use { c -> if (c.moveToFirst()) c.getLong(0) else null } ?: return false
+        val values = android.content.ContentValues().apply { put("read", 0) }
+        return contentResolver.update(Uri.parse("content://sms/$latestId"), values, null, null) > 0
+    }
+
+    /** Clears the incoming-message notification for [address] once its thread is read. */
+    private fun cancelNotificationFor(address: String) {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        nm.cancel(address.hashCode())
+        val remaining = nm.activeNotifications.count {
+            it.notification.group == SmsReceiver.GROUP_KEY_SMS && it.id != SmsReceiver.SUMMARY_NOTIFICATION_ID
+        }
+        if (remaining == 0) nm.cancel(SmsReceiver.SUMMARY_NOTIFICATION_ID)
     }
 
     private fun getContacts(): List<Map<String, String>> {

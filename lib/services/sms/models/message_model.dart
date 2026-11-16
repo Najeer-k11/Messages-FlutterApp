@@ -16,4 +16,13 @@ class MessageModel {
   late DateTime timestamp;
   late bool isMe;
   late bool isRead;
+
+  /// MMS media parts, each `<content uri>|<mime type>`.
+  List<String> media = [];
+
+  /// Outgoing message still in the outbox / queued.
+  bool pending = false;
+
+  /// Outgoing message that failed to send.
+  bool failed = false;
 }

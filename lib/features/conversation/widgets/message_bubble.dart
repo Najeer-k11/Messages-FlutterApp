@@ -1,9 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:msgs/features/conversation/widgets/mms_image.dart';
+import 'package:msgs/ui/ui.dart';
 
 class MessageBubble extends StatefulWidget {
   final String messageText;
@@ -12,6 +14,11 @@ class MessageBubble extends StatefulWidget {
   final bool isFirstInGroup;
   final bool isLastInGroup;
 
+  /// MMS media parts (`<uri>|<mime>`).
+  final List<String> media;
+  final bool pending;
+  final bool failed;
+
   const MessageBubble({
     super.key,
     required this.messageText,
@@ -19,6 +26,9 @@ class MessageBubble extends StatefulWidget {
     required this.timestamp,
     required this.isFirstInGroup,
     required this.isLastInGroup,
+    this.media = const [],
+    this.pending = false,
+    this.failed = false,
   });
 
   @override
@@ -42,180 +52,117 @@ class _MessageBubbleState extends State<MessageBubble> {
     super.dispose();
   }
 
-  void _showLinkBottomSheet(BuildContext context, String url) {
+  void _showDetectedSheet(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String value,
+    required List<({IconData icon, String title, VoidCallback onTap})> actions,
+  }) {
     HapticFeedback.lightImpact();
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        final theme = Theme.of(context);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    showExpressiveSheet<void>(
+      context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DetailsHeader(
+              badge: ShapeBox(
+                size: 52,
+                shape: CookieBorder.cookie7,
+                color: ctx.colors.tertiaryContainer,
+                child: Icon(icon, color: ctx.colors.onTertiaryContainer),
+              ),
+              title: title,
+              subtitle: value,
+            ),
+            SheetGroup(
               children: [
-                Text(
-                  'Link Detected',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.bold,
+                for (var i = 0; i < actions.length; i++) ...[
+                  if (i > 0) const SettingsDivider(),
+                  SheetActionRow(
+                    icon: actions[i].icon,
+                    title: actions[i].title,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      HapticFeedback.lightImpact();
+                      actions[i].onTap();
+                    },
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  url,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 24),
-                ListTile(
-                  leading: Icon(
-                    Icons.open_in_new,
-                    color: theme.colorScheme.primary,
-                  ),
-                  title: const Text('Open Link'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    HapticFeedback.lightImpact();
-                    final uri = Uri.parse(
-                      url.startsWith('http') ? url : 'https://$url',
-                    );
-                    try {
-                      await launchUrl(
-                        uri,
-                        mode: LaunchMode.externalApplication,
-                      );
-                    } catch (_) {}
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.copy, color: theme.colorScheme.primary),
-                  title: const Text('Copy Link'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    HapticFeedback.lightImpact();
-                    Clipboard.setData(ClipboardData(text: url));
-                  },
-                ),
+                ],
               ],
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showLinkBottomSheet(BuildContext context, String url) {
+    _showDetectedSheet(
+      context,
+      icon: Icons.link_rounded,
+      title: 'Link',
+      value: url,
+      actions: [
+        (
+          icon: Icons.open_in_new_rounded,
+          title: 'Open link',
+          onTap: () async {
+            final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
+            try {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            } catch (_) {}
+          },
+        ),
+        (icon: Icons.copy_rounded, title: 'Copy link', onTap: () => Clipboard.setData(ClipboardData(text: url))),
+      ],
     );
   }
 
   void _showPhoneBottomSheet(BuildContext context, String phone) {
-    HapticFeedback.lightImpact();
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        final theme = Theme.of(context);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Phone Number Detected',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  phone,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ListTile(
-                  leading: Icon(Icons.phone, color: theme.colorScheme.primary),
-                  title: const Text('Call'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    HapticFeedback.lightImpact();
-                    final uri = Uri.parse(
-                      'tel:${phone.replaceAll(RegExp(r'\s+|-'), '')}',
-                    );
-                    try {
-                      await launchUrl(uri);
-                    } catch (_) {}
-                  },
-                ),
-                ListTile(
-                  leading: Icon(
-                    Icons.message,
-                    color: theme.colorScheme.primary,
-                  ),
-                  title: const Text('Send Message'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    HapticFeedback.lightImpact();
-                    final uri = Uri.parse(
-                      'sms:${phone.replaceAll(RegExp(r'\s+|-'), '')}',
-                    );
-                    try {
-                      await launchUrl(uri);
-                    } catch (_) {}
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.copy, color: theme.colorScheme.primary),
-                  title: const Text('Copy Number'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    HapticFeedback.lightImpact();
-                    Clipboard.setData(ClipboardData(text: phone));
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    final digits = phone.replaceAll(RegExp(r'\s+|-'), '');
+    _showDetectedSheet(
+      context,
+      icon: Icons.phone_rounded,
+      title: 'Phone number',
+      value: phone,
+      actions: [
+        (
+          icon: Icons.call_outlined,
+          title: 'Call',
+          onTap: () async {
+            try {
+              await launchUrl(Uri.parse('tel:$digits'));
+            } catch (_) {}
+          },
+        ),
+        (
+          icon: Icons.sms_outlined,
+          title: 'Send message',
+          onTap: () async {
+            try {
+              await launchUrl(Uri.parse('sms:$digits'));
+            } catch (_) {}
+          },
+        ),
+        (icon: Icons.copy_rounded, title: 'Copy number', onTap: () => Clipboard.setData(ClipboardData(text: phone))),
+      ],
     );
   }
 
-  List<InlineSpan> _buildMessageSpans(
-    BuildContext context,
-    String text,
-    bool isMe,
-    ThemeData theme,
-  ) {
+  List<InlineSpan> _buildMessageSpans(BuildContext context, String text, bool isMe, ThemeData theme) {
     final List<InlineSpan> spans = [];
 
-    final urlRegex = RegExp(
-      r'\b(?:https?://|www\.)\S+\b',
-      caseSensitive: false,
-    );
-    final phoneRegex = RegExp(
-      r'\+?\b\d{10,12}\b|\+?\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b',
-    );
+    final urlRegex = RegExp(r'\b(?:https?://|www\.)\S+\b', caseSensitive: false);
+    final phoneRegex = RegExp(r'\+?\b\d{10,12}\b|\+?\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b');
 
     // Find all matches
     final List<_TextMatch> matches = [];
 
     for (final match in urlRegex.allMatches(text)) {
-      matches.add(
-        _TextMatch(match.start, match.end, match.group(0)!, _MatchType.url),
-      );
+      matches.add(_TextMatch(match.start, match.end, match.group(0)!, _MatchType.url));
     }
 
     for (final match in phoneRegex.allMatches(text)) {
@@ -225,8 +172,7 @@ class _MessageBubbleState extends State<MessageBubble> {
 
       bool overlaps = false;
       for (final existing in matches) {
-        if ((start >= existing.start && start < existing.end) ||
-            (end > existing.start && end <= existing.end)) {
+        if ((start >= existing.start && start < existing.end) || (end > existing.start && end <= existing.end)) {
           overlaps = true;
           break;
         }
@@ -242,16 +188,14 @@ class _MessageBubbleState extends State<MessageBubble> {
     int lastIndex = 0;
 
     // Style for links/phone numbers
-    final linkColor = isMe
-        ? theme.colorScheme.onPrimary
-        : theme.colorScheme.primary;
+    final linkColor = isMe ? theme.colorScheme.onPrimary : theme.colorScheme.primary;
 
     final linkStyle = TextStyle(
       color: linkColor,
       decoration: TextDecoration.underline,
       decorationColor: linkColor,
       fontWeight: FontWeight.normal,
-      fontSize: theme.textTheme.bodyMedium!.fontSize,
+      fontSize: theme.textTheme.bodyLarge!.fontSize,
     );
 
     for (final match in matches) {
@@ -271,9 +215,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         };
       _recognizers.add(recognizer);
 
-      spans.add(
-        TextSpan(text: match.value, style: linkStyle, recognizer: recognizer),
-      );
+      spans.add(TextSpan(text: match.value, style: linkStyle, recognizer: recognizer));
 
       lastIndex = match.end;
     }
@@ -291,27 +233,26 @@ class _MessageBubbleState extends State<MessageBubble> {
     final theme = Theme.of(context);
     final isMe = widget.isMe;
 
+    // Expressive grouping: the sender-side corners tighten to 8dp between bubbles of one group,
+    // and the last bubble of a group gets a 4dp tail corner.
+    const big = Radius.circular(24);
+    final top = Radius.circular(widget.isFirstInGroup ? 24 : 8);
+    final bottom = Radius.circular(widget.isLastInGroup ? 4 : 8);
     final borderRadius = BorderRadius.only(
-      topLeft: const Radius.circular(20),
-      topRight: const Radius.circular(20),
-      bottomLeft: Radius.circular(!isMe && widget.isLastInGroup ? 4 : 20),
-      bottomRight: Radius.circular(isMe && widget.isLastInGroup ? 4 : 20),
+      topLeft: isMe ? big : top,
+      bottomLeft: isMe ? big : bottom,
+      topRight: isMe ? top : big,
+      bottomRight: isMe ? bottom : big,
     );
 
     // Clear old recognizers and generate new ones
     _clearRecognizers();
     final spans = _buildMessageSpans(context, widget.messageText, isMe, theme);
 
-    final bubbleColor = isMe
-        ? theme.colorScheme.primary
-        : theme.colorScheme.surfaceContainerHighest;
+    final bubbleColor = isMe ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHigh;
 
     final textStyle =
-        theme.textTheme.bodyMedium?.copyWith(
-          color: isMe
-              ? theme.colorScheme.onPrimary
-              : theme.colorScheme.onSurface,
-        ) ??
+        theme.textTheme.bodyLarge?.copyWith(color: isMe ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface) ??
         const TextStyle();
 
     return GestureDetector(
@@ -321,7 +262,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           context,
           PageRouteBuilder(
             opaque: false,
-            barrierColor: Colors.black.withValues(alpha: 0.6),
+            barrierColor: theme.colorScheme.scrim.withValues(alpha: 0.5),
             barrierDismissible: true,
             transitionDuration: const Duration(milliseconds: 250),
             reverseTransitionDuration: const Duration(milliseconds: 200),
@@ -350,34 +291,21 @@ class _MessageBubbleState extends State<MessageBubble> {
                 ),
               );
             },
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-                  final scaleAnimation = Tween<double>(begin: 0.85, end: 1.0)
-                      .animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutBack,
-                        ),
-                      );
-                  final fadeAnimation = CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOut,
-                  );
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              final scaleAnimation = Tween<double>(
+                begin: 0.85,
+                end: 1.0,
+              ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutBack));
+              final fadeAnimation = CurvedAnimation(parent: animation, curve: Curves.easeOut);
 
-                  return BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: 8 * animation.value,
-                      sigmaY: 8 * animation.value,
-                    ),
-                    child: FadeTransition(
-                      opacity: fadeAnimation,
-                      child: ScaleTransition(
-                        scale: scaleAnimation,
-                        child: child,
-                      ),
-                    ),
-                  );
-                },
+              return BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8 * animation.value, sigmaY: 8 * animation.value),
+                child: FadeTransition(
+                  opacity: fadeAnimation,
+                  child: ScaleTransition(scale: scaleAnimation, child: child),
+                ),
+              );
+            },
           ),
         );
       },
@@ -407,30 +335,75 @@ class _MessageBubbleState extends State<MessageBubble> {
         curve: Curves.easeOutBack,
         transform: Matrix4.translationValues(_dragOffset, 0, 0),
         margin: EdgeInsets.only(
-          bottom: widget.isLastInGroup ? 8.0 : 2.0,
-          left: isMe ? 40.0 : 8.0,
-          right: isMe ? 8.0 : 40.0,
+          bottom: widget.isLastInGroup ? 10.0 : 3.0,
+          left: isMe ? 48.0 : 0.0,
+          right: isMe ? 0.0 : 48.0,
         ),
         child: Align(
           alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: bubbleColor,
-              borderRadius: borderRadius,
-              boxShadow: widget.isLastInGroup
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+          child: Column(
+            crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              for (final m in widget.media)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: GestureDetector(
+                    onTap: () => showMmsImageViewer(context, m.split('|').first),
+                    child: ClipRRect(
+                      borderRadius: borderRadius,
+                      child: m.split('|').last.startsWith('image/')
+                          ? MmsImage(uri: m.split('|').first, width: 240, height: 240, maxSide: 720)
+                          : Container(
+                              width: 200,
+                              padding: const EdgeInsets.all(16),
+                              color: bubbleColor,
+                              child: Row(
+                                children: [
+                                  Icon(Icons.attachment_rounded, color: textStyle.color),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(m.split('|').last, style: textStyle)),
+                                ],
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+              if (widget.messageText.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: widget.failed ? theme.colorScheme.errorContainer : bubbleColor,
+                    borderRadius: borderRadius,
+                  ),
+                  child: RichText(
+                    text: TextSpan(
+                      children: spans,
+                      style: widget.failed ? textStyle.copyWith(color: theme.colorScheme.onErrorContainer) : textStyle,
+                    ),
+                  ),
+                ),
+              if (widget.pending || widget.failed)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, left: 6, right: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        widget.failed ? Icons.error_outline_rounded : Icons.schedule_rounded,
+                        size: 14,
+                        color: widget.failed ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant,
                       ),
-                    ]
-                  : null,
-            ),
-            child: RichText(
-              text: TextSpan(children: spans, style: textStyle),
-            ),
+                      const SizedBox(width: 4),
+                      Text(
+                        widget.failed ? 'Not sent' : 'Sending…',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: widget.failed ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -483,10 +456,7 @@ class InstagramZoomOverlay extends StatelessWidget {
             Material(
               color: Colors.transparent,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                 decoration: BoxDecoration(
                   color: backgroundColor,
                   borderRadius: borderRadius,
@@ -514,123 +484,72 @@ class InstagramZoomOverlay extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            // Floating action pill matching the bubble background color
+            // Floating action pill.
             Material(
               color: Colors.transparent,
               child: Container(
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
+                padding: const EdgeInsets.all(6),
+                decoration: ShapeDecoration(
+                  shape: const StadiumBorder(),
+                  color: theme.colorScheme.surfaceContainerHigh,
+                  shadows: blueGlow(context),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _OverlayAction(
+                      icon: Icons.copy_rounded,
+                      label: 'Copy',
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Clipboard.setData(ClipboardData(text: messageText));
+                        Navigator.pop(context);
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    _OverlayAction(
+                      icon: Icons.share_rounded,
+                      label: 'Share',
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        SharePlus.instance.share(ShareParams(text: messageText));
+                        Navigator.pop(context);
+                      },
                     ),
                   ],
-                  border: Border.all(
-                    color: isMe
-                        ? Colors.white.withValues(alpha: 0.2)
-                        : theme.colorScheme.outlineVariant.withValues(
-                            alpha: 0.3,
-                          ),
-                  ),
-                ),
-                child: IntrinsicHeight(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Copy Button
-                      InkWell(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Clipboard.setData(ClipboardData(text: messageText));
-                          Navigator.pop(context);
-                        },
-                        borderRadius: const BorderRadius.horizontal(
-                          left: Radius.circular(30),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.copy,
-                                size: 18,
-                                color: isMe
-                                    ? Colors.white
-                                    : theme.colorScheme.primary,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Copy',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: isMe
-                                      ? Colors.white
-                                      : theme.colorScheme.onSurface,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // Divider
-                      VerticalDivider(
-                        width: 1,
-                        thickness: 1,
-                        color: isMe
-                            ? Colors.white.withValues(alpha: 0.2)
-                            : theme.colorScheme.outlineVariant.withValues(
-                                alpha: 0.3,
-                              ),
-                      ),
-                      // Share Button
-                      InkWell(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          SharePlus.instance.share(ShareParams(text: messageText));
-                          Navigator.pop(context);
-                        },
-                        borderRadius: const BorderRadius.horizontal(
-                          right: Radius.circular(30),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.share,
-                                size: 18,
-                                color: isMe
-                                    ? Colors.white
-                                    : theme.colorScheme.primary,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Share',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: isMe
-                                      ? Colors.white
-                                      : theme.colorScheme.onSurface,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OverlayAction extends StatelessWidget {
+  const _OverlayAction({required this.icon, required this.label, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return LuminousElastic.small(
+      shape: const StadiumBorder(),
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.only(left: 16, right: 20),
+        decoration: ShapeDecoration(shape: const StadiumBorder(), color: c.primaryContainer),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: c.onPrimaryContainer),
+            const SizedBox(width: 8),
+            Text(label, style: context.type.labelLargeEmphasized.copyWith(color: c.onPrimaryContainer)),
           ],
         ),
       ),

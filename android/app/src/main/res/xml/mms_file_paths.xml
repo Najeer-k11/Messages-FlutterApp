@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PDU files exchanged with the platform MMS service (see MmsSender). -->
+<paths>
+    <cache-path name="mms" path="mms/" />
+</paths>

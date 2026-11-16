@@ -1,145 +1,131 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:msgs/features/compose/compose_screen.dart' show ExpressiveSearchField;
 import 'package:msgs/features/conversation/conversation_screen.dart';
 import 'package:msgs/features/inbox/widgets/thread_card.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';
 import 'package:msgs/services/sms/repository/sms_repository.dart';
+import 'package:msgs/ui/ui.dart';
 
-class InboxSearchDelegate extends SearchDelegate<void> {
+/// Searches sender names, numbers and last messages, then deep-searches every message body.
+class SearchScreen extends StatefulWidget {
+  const SearchScreen({super.key, required this.threads});
+
   final List<ThreadModel> threads;
 
-  InboxSearchDelegate({required this.threads});
+  @override
+  State<SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends State<SearchScreen> {
+  final _query = TextEditingController();
 
   @override
-  String get searchFieldLabel => 'Search conversations...';
-
-  @override
-  ThemeData appBarTheme(BuildContext context) {
-    final theme = Theme.of(context);
-    return theme.copyWith(
-      appBarTheme: theme.appBarTheme.copyWith(
-        backgroundColor: theme.colorScheme.surface,
-        elevation: 0,
-      ),
-      inputDecorationTheme: const InputDecorationTheme(
-        border: InputBorder.none,
-      ),
-    );
+  void initState() {
+    super.initState();
+    _query.addListener(() => setState(() {}));
   }
 
   @override
-  List<Widget>? buildActions(BuildContext context) {
-    return [
-      if (query.isNotEmpty)
-        IconButton(
-          icon: const Icon(Icons.clear),
-          onPressed: () {
-            query = '';
-          },
-        ),
-    ];
+  void dispose() {
+    _query.dispose();
+    super.dispose();
   }
 
   @override
-  Widget? buildLeading(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.arrow_back),
-      onPressed: () {
-        close(context, null);
-      },
-    );
-  }
+  Widget build(BuildContext context) {
+    final term = _query.text.trim().toLowerCase();
+    final top = MediaQuery.paddingOf(context).top;
 
-  @override
-  Widget buildResults(BuildContext context) {
-    return _buildSearchResults(context);
-  }
+    final filtered = term.isEmpty
+        ? const <ThreadModel>[]
+        : widget.threads.where((t) {
+            return t.senderName.toLowerCase().contains(term) ||
+                t.address.toLowerCase().contains(term) ||
+                t.lastMessage.toLowerCase().contains(term);
+          }).toList();
 
-  @override
-  Widget buildSuggestions(BuildContext context) {
-    return _buildSearchResults(context);
-  }
-
-  Widget _buildSearchResults(BuildContext context) {
-    final theme = Theme.of(context);
-    final searchTerm = query.trim().toLowerCase();
-
-    if (searchTerm.isEmpty) {
-      return _buildEmptyState(
-        theme,
-        icon: Icons.search_rounded,
-        message: 'Search conversations and messages',
-        secondary: 'Type a name, number, or message',
-      );
-    }
-
-    // Search by sender name, address, and last message (thread-level)
-    final filtered = threads.where((thread) {
-      final name = thread.senderName.toLowerCase();
-      final address = thread.address.toLowerCase();
-      final body = thread.lastMessage.toLowerCase();
-      return name.contains(searchTerm) ||
-          address.contains(searchTerm) ||
-          body.contains(searchTerm);
-    }).toList();
-
-    // Also search all messages in Isar (message-body deep search)
-    return _DeepSearchResults(
-      threads: filtered,
-      searchTerm: searchTerm,
-      onClose: (thread) => close(context, null),
-    );
-  }
-
-  Widget _buildEmptyState(
-    ThemeData theme, {
-    required IconData icon,
-    required String message,
-    String? secondary,
-  }) {
-    return Center(
+    return Material(
+      color: context.colors.surface,
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            size: 64,
-            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, top + 12, 16, 8),
+            child: Row(
+              children: [
+                RoundTonalButton(
+                  icon: Icons.arrow_back_rounded,
+                  label: 'Back',
+                  size: 52,
+                  onTap: () => Navigator.pop(context),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ExpressiveSearchField(controller: _query, hint: 'Search messages', autofocus: true),
+                ),
+              ],
             ),
           ),
-          if (secondary != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              secondary,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
+          Expanded(
+            child: term.isEmpty
+                ? const _Hint(
+                    icon: Icons.manage_search_rounded,
+                    title: 'Search everything',
+                    body: 'Names, numbers and every message on this device.',
+                  )
+                : _DeepSearchResults(threads: filtered, searchTerm: term),
+          ),
         ],
       ),
     );
   }
 }
 
-/// Widget that performs a deep search across all messages in Isar
-/// and renders the combined thread results.
+class _Hint extends StatelessWidget {
+  const _Hint({required this.icon, required this.title, required this.body});
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 0, 32, 80),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SpringIn(
+              child: ShapeBox(
+                size: 96,
+                shape: CookieBorder.cookie12,
+                color: c.primaryContainer,
+                child: Icon(icon, size: 42, color: c.onPrimaryContainer),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(title, style: context.type.headlineSmallEmphasized.copyWith(color: c.onSurface)),
+            const SizedBox(height: 6),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: context.text.bodyLarge?.copyWith(color: c.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Combines the thread-level matches with a deep search across all messages in Isar.
 class _DeepSearchResults extends StatefulWidget {
   final List<ThreadModel> threads;
   final String searchTerm;
-  final void Function(ThreadModel thread) onClose;
 
-  const _DeepSearchResults({
-    required this.threads,
-    required this.searchTerm,
-    required this.onClose,
-  });
+  const _DeepSearchResults({required this.threads, required this.searchTerm});
 
   @override
   State<_DeepSearchResults> createState() => _DeepSearchResultsState();
@@ -148,6 +134,7 @@ class _DeepSearchResults extends StatefulWidget {
 class _DeepSearchResultsState extends State<_DeepSearchResults> {
   List<ThreadModel>? _deepResults;
   bool _isSearching = false;
+  int _generation = 0;
 
   @override
   void initState() {
@@ -164,100 +151,55 @@ class _DeepSearchResultsState extends State<_DeepSearchResults> {
   }
 
   Future<void> _performDeepSearch() async {
+    // Results from an older, slower query must not overwrite a newer one.
+    final generation = ++_generation;
     setState(() => _isSearching = true);
     try {
       final repo = context.read<SmsRepository>();
-
-      // Use repository method to search message bodies
       final matchingAddresses = await repo.searchMessageAddresses(widget.searchTerm);
-
-      // Find threads not already in widget.threads that match message search
-      final existingAddresses = widget.threads.map((t) => t.address).toSet();
-      final newAddresses = matchingAddresses
-          .where((a) => !existingAddresses.contains(a))
-          .toList();
-
-      final additionalThreads = await repo.getThreadsByAddresses(newAddresses);
-
-      final combined = [...widget.threads, ...additionalThreads];
-      combined.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-      if (mounted) setState(() => _deepResults = combined);
+      final existing = widget.threads.map((t) => t.address).toSet();
+      final additional = await repo.getThreadsByAddresses(
+        matchingAddresses.where((a) => !existing.contains(a)).toList(),
+      );
+      final combined = [...widget.threads, ...additional]..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      if (mounted && generation == _generation) setState(() => _deepResults = combined);
     } catch (_) {
-      if (mounted) setState(() => _deepResults = widget.threads);
+      if (mounted && generation == _generation) setState(() => _deepResults = widget.threads);
     } finally {
-      if (mounted) setState(() => _isSearching = false);
+      if (mounted && generation == _generation) setState(() => _isSearching = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final results = _deepResults ?? widget.threads;
 
     if (_isSearching && results.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: ExpressiveLoadingIndicator(contained: true));
     }
 
     if (results.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.search_off_rounded,
-              size: 64,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No messages found',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'No results for "${widget.searchTerm}"',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
-        ),
+      return _Hint(
+        icon: Icons.search_off_rounded,
+        title: 'No messages found',
+        body: 'Nothing matches “${widget.searchTerm}”.',
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            theme.colorScheme.surface,
-            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-          ],
-        ),
-      ),
-      child: ListView.builder(
-        padding: const EdgeInsets.only(top: 8.0, bottom: 80.0),
-        itemCount: results.length,
-        itemBuilder: (context, index) {
-          final thread = results[index];
-          return ThreadCard(
-            thread: thread,
-            onTap: () {
-              widget.onClose(thread);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ConversationScreen(thread: thread),
-                ),
-              );
-            },
-          );
-        },
-      ),
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(16, 4, 16, 24 + MediaQuery.paddingOf(context).bottom),
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        final thread = results[index];
+        return ThreadCard(
+          thread: thread,
+          dismissible: false,
+          onTap: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => ConversationScreen(thread: thread)),
+          ),
+        );
+      },
     );
   }
 }

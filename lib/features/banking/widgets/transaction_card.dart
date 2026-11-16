@@ -1,37 +1,41 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:msgs/ui/ui.dart';
 
 class TransactionData {
   final String amount;
   final bool isCredit;
   final String accountOrEntity;
 
-  TransactionData({
-    required this.amount,
-    required this.isCredit,
-    required this.accountOrEntity,
-  });
+  TransactionData({required this.amount, required this.isCredit, required this.accountOrEntity});
 
-  // Very basic extraction for dummy UI purposes
+  static final _amount = RegExp(r'(?:\b(?:rs\.?|inr)|₹)\s?([\d,]+(?:\.\d{1,2})?)', caseSensitive: false);
+  static final _account = RegExp(
+    r'(?:a/c|acct|account|card)(?:\s*no\.?)?[\s:]*(?:ending(?:\s+with)?\s*|[x*]+\s*)?(\d{3,6})\b',
+    caseSensitive: false,
+  );
+  static final _credit = RegExp(r'\b(credited|received|deposited|refund(ed)?)\b', caseSensitive: false);
+  static final _debit = RegExp(r'\b(debited|spent|paid|withdrawn|sent|purchase)\b', caseSensitive: false);
+
   static TransactionData? extract(String messageText) {
-    final lower = messageText.toLowerCase();
-    final isCredit = lower.contains('credited') || lower.contains('received');
-    
-    final amtMatch = RegExp(r'(?:rs\.?|inr)\s?([\d,]+\.?\d*)', caseSensitive: false).firstMatch(messageText);
+    final amtMatch = _amount.firstMatch(messageText);
     if (amtMatch == null) return null;
-    
     final amount = amtMatch.group(1)!;
 
-    // Try to extract account ending
-    String entity = 'Account';
-    final acctMatch = RegExp(r'[a/c|acct].*?(x|ending|no\.?).*?(\d{3,4})', caseSensitive: false).firstMatch(messageText);
-    if (acctMatch != null && acctMatch.group(2) != null) {
-      entity = 'A/C ...${acctMatch.group(2)}';
-    }
+    // "Rs 500 debited from A/c X and credited to beneficiary" is a debit for the reader. Decide
+    // by whichever verb comes first rather than by whether "credited" appears anywhere.
+    final credit = _credit.firstMatch(messageText)?.start;
+    final debit = _debit.firstMatch(messageText)?.start;
+    final isCredit = credit != null && (debit == null || credit < debit);
+
+    final acct = _account.firstMatch(messageText);
+    final entity = acct != null ? 'A/C …${acct.group(1)}' : 'Account';
 
     return TransactionData(amount: amount, isCredit: isCredit, accountOrEntity: entity);
   }
 }
 
+/// A bank transaction as a list tile: Cookie9 badge (primary = money in, error = money out),
+/// title, account, and the amount as the emphasized trailing value.
 class TransactionCard extends StatelessWidget {
   final TransactionData data;
 
@@ -39,62 +43,50 @@ class TransactionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = data.isCredit ? Colors.green.shade600 : theme.colorScheme.error;
-    final icon = data.isCredit ? Icons.arrow_downward : Icons.arrow_upward;
-
-    return Container(
-      width: 160,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+    final c = context.colors;
+    final accent = data.isCredit ? c.primary : c.error;
+    final onAccent = data.isCredit ? c.onPrimary : c.onError;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 14, 18, 14),
+        decoration: ShapeDecoration(
+          color: context.groupContainer.withValues(alpha: .94),
+          shape: Shapes.tile.copyWith(side: BorderSide(color: c.outlineVariant.withValues(alpha: .35), width: 1.25)),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 14, color: color),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  data.isCredit ? 'Received' : 'Spent',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+        child: Row(
+          children: [
+            ShapeBox(
+              size: 48,
+              shape: CookieBorder.cookie9,
+              color: accent,
+              child: Icon(data.isCredit ? Icons.south_west_rounded : Icons.north_east_rounded, color: onAccent),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    data.isCredit ? 'Received' : 'Spent',
+                    style: context.type.titleMediumEmphasized.copyWith(color: c.onSurface),
                   ),
-                ),
+                  Text(
+                    data.accountOrEntity,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.bodyMedium?.copyWith(color: c.onSurfaceVariant),
+                  ),
+                ],
               ),
-            ],
-          ),
-          Text(
-            '₹${data.amount}',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: color,
             ),
-          ),
-          Text(
-            data.accountOrEntity,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+            const SizedBox(width: 8),
+            Text(
+              '${data.isCredit ? '+' : '−'}₹${data.amount}',
+              style: context.type.headlineSmallEmphasized.copyWith(color: accent),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

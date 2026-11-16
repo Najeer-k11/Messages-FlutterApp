@@ -43,10 +43,7 @@ class HubsLoaded extends HubsState {
   final List<OtpData> activeOtps;
   final List<TransactionData> recentTransactions;
 
-  const HubsLoaded({
-    required this.activeOtps,
-    required this.recentTransactions,
-  });
+  const HubsLoaded({required this.activeOtps, required this.recentTransactions});
 
   @override
   List<Object?> get props => [activeOtps, recentTransactions];
@@ -61,23 +58,26 @@ class HubsResult {
   HubsResult({required this.activeOtps, required this.recentTransactions});
 }
 
+/// How long a code counts as active when its message states no validity.
+const _defaultOtpValidity = Duration(minutes: 10);
+
 // Top level function for Isolate
-HubsResult _parseThreads(List<ThreadModel> threads) {
+HubsResult _parseThreads(List<ThreadModel> threads, DateTime now) {
   final List<OtpData> activeOtps = [];
   final List<TransactionData> recentTransactions = [];
 
   for (var thread in threads) {
-    final category = MessageClassifier.classify(
-      thread.lastMessage,
-      thread.senderName,
-    );
+    final category = MessageClassifier.classify(thread.lastMessage, thread.senderName);
     if (category == MessageCategory.otp) {
-      final otpData = OtpParser.extract(
-        thread.lastMessage,
-        thread.senderName,
-      );
+      final otpData = OtpParser.extract(thread.lastMessage, thread.senderName);
+      // Only codes still inside their validity window are "active". Previously the last OTP of
+      // every sender was shown forever, however old.
       if (otpData != null) {
-        activeOtps.add(otpData);
+        final expiresAt = thread.timestamp.add(otpData.validity ?? _defaultOtpValidity);
+        final remaining = expiresAt.difference(now);
+        if (!remaining.isNegative) {
+          activeOtps.add(OtpData(code: otpData.code, serviceName: otpData.serviceName, validity: remaining));
+        }
       }
     } else if (category == MessageCategory.banking) {
       final txData = TransactionData.extract(thread.lastMessage);
@@ -87,10 +87,7 @@ HubsResult _parseThreads(List<ThreadModel> threads) {
     }
   }
 
-  return HubsResult(
-    activeOtps: activeOtps,
-    recentTransactions: recentTransactions,
-  );
+  return HubsResult(activeOtps: activeOtps, recentTransactions: recentTransactions);
 }
 
 // ── BLoC ─────────────────────────────────────────────────────────────────────
@@ -98,10 +95,10 @@ HubsResult _parseThreads(List<ThreadModel> threads) {
 class HubsBloc extends Bloc<HubsEvent, HubsState> {
   final InboxBloc _inboxBloc;
   StreamSubscription? _inboxSubscription;
+  Timer? _expiryTicker;
+  List<ThreadModel> _lastThreads = const [];
 
-  HubsBloc({required InboxBloc inboxBloc})
-      : _inboxBloc = inboxBloc,
-        super(HubsInitial()) {
+  HubsBloc({required InboxBloc inboxBloc}) : _inboxBloc = inboxBloc, super(HubsInitial()) {
     on<ProcessThreadsEvent>(_onProcessThreads);
 
     // Listen to InboxBloc changes
@@ -111,6 +108,11 @@ class HubsBloc extends Bloc<HubsEvent, HubsState> {
       }
     });
 
+    // Re-evaluate periodically so expired codes drop off and remaining time stays current.
+    _expiryTicker = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_lastThreads.isNotEmpty) add(ProcessThreadsEvent(threads: _lastThreads));
+    });
+
     // Check initial state
     final initialState = _inboxBloc.state;
     if (initialState is InboxLoaded) {
@@ -118,32 +120,28 @@ class HubsBloc extends Bloc<HubsEvent, HubsState> {
     }
   }
 
-  Future<void> _onProcessThreads(
-      ProcessThreadsEvent event, Emitter<HubsState> emit) async {
+  Future<void> _onProcessThreads(ProcessThreadsEvent event, Emitter<HubsState> emit) async {
     if (state is HubsInitial) {
       emit(HubsProcessing());
     }
+    _lastThreads = event.threads;
+    final now = DateTime.now().toUtc();
 
     try {
       // Offload heavy RegEx parsing to a separate background isolate
-      final result = await Isolate.run(() => _parseThreads(event.threads));
-      emit(HubsLoaded(
-        activeOtps: result.activeOtps,
-        recentTransactions: result.recentTransactions,
-      ));
+      final result = await Isolate.run(() => _parseThreads(event.threads, now));
+      emit(HubsLoaded(activeOtps: result.activeOtps, recentTransactions: result.recentTransactions));
     } catch (_) {
       // Fallback
-      final result = _parseThreads(event.threads);
-      emit(HubsLoaded(
-        activeOtps: result.activeOtps,
-        recentTransactions: result.recentTransactions,
-      ));
+      final result = _parseThreads(event.threads, now);
+      emit(HubsLoaded(activeOtps: result.activeOtps, recentTransactions: result.recentTransactions));
     }
   }
 
   @override
   Future<void> close() {
     _inboxSubscription?.cancel();
+    _expiryTicker?.cancel();
     return super.close();
   }
 }

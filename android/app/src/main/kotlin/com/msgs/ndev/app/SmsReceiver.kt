@@ -47,9 +47,10 @@ class SmsReceiver : BroadcastReceiver() {
                 val body = messages.joinToString(separator = "") { it.displayMessageBody }
                 val timestamp = messages[0].timestampMillis
 
-                // Skip promotional messages (–P senders) — just don't notify, don't delete
-                if (sender.contains("-P", ignoreCase = true) ||
-                    sender.uppercase().matches(Regex(".*-[A-Z]{2,}$"))) {
+                // Skip promotional messages — just don't notify, don't delete. DLT sender IDs end
+                // in a category suffix: -P promotional, -S service, -T transactional, -G government.
+                // Only -P is promotional; OTPs and bank alerts (-S / -T) must still notify.
+                if (isPromotionalSender(sender)) {
                     // For SMS_DELIVER we still save so the sync picks it up normally
                     if (action == Telephony.Sms.Intents.SMS_DELIVER_ACTION) {
                         saveSmsToProvider(context, sender, body, timestamp)
@@ -65,6 +66,9 @@ class SmsReceiver : BroadcastReceiver() {
             }
         }
     }
+
+    private fun isPromotionalSender(sender: String): Boolean =
+        sender.trim().uppercase().endsWith("-P")
 
     private fun saveSmsToProvider(context: Context, sender: String, body: String, timestamp: Long) {
         try {
@@ -116,7 +120,8 @@ class SmsReceiver : BroadcastReceiver() {
         } catch (_: Exception) { null }
     }
 
-    private fun showNotification(context: Context, sender: String, body: String) {
+    /** Also used by [MmsStatusReceiver] for incoming MMS. */
+    fun showNotification(context: Context, sender: String, body: String) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // Create notification channel

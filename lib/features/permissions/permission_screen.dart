@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:msgs/features/inbox/inbox_screen.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'dart:math' as math;
+
+import 'package:msgs/ui/ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:msgs/services/sms/repository/sms_repository.dart';
 
@@ -12,10 +14,13 @@ class PermissionScreen extends StatefulWidget {
   State<PermissionScreen> createState() => _PermissionScreenState();
 }
 
-class _PermissionScreenState extends State<PermissionScreen>
-    with WidgetsBindingObserver {
+class _PermissionScreenState extends State<PermissionScreen> with WidgetsBindingObserver {
   bool _isLoading = false;
   bool _permsDenied = false;
+
+  /// initState and every resume both check permissions; without this guard two checks that
+  /// complete together push the inbox twice.
+  bool _navigated = false;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -78,9 +83,9 @@ class _PermissionScreenState extends State<PermissionScreen>
       // We navigate immediately; the dialog appears on top.
       // If user accepts, background SMS receiving will work.
       // If user denies, the app still works for reading and sending.
+      final repo = context.read<SmsRepository>();
       _navigateToInbox();
 
-      final repo = context.read<SmsRepository>();
       final isDefault = await repo.isDefaultSmsApp();
       if (!isDefault) {
         repo.requestDefaultSmsApp(); // fire and forget
@@ -94,15 +99,9 @@ class _PermissionScreenState extends State<PermissionScreen>
   }
 
   void _navigateToInbox() {
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, _) => const InboxScreen(),
-        transitionsBuilder: (context, animation, _, child) =>
-            FadeTransition(opacity: animation, child: child),
-      ),
-    );
+    if (!mounted || _navigated) return;
+    _navigated = true;
+    Navigator.pushReplacement(context, inboxRoute());
   }
 
   Future<void> _openSettings() async {
@@ -113,120 +112,189 @@ class _PermissionScreenState extends State<PermissionScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.colors;
+    final insets = MediaQuery.paddingOf(context);
+    final denied = _permsDenied;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(),
-              Icon(
-                _permsDenied ? Icons.lock_rounded : Icons.message_rounded,
-                size: 72,
-                color: _permsDenied
-                    ? theme.colorScheme.error
-                    : theme.colorScheme.primary,
-              )
-                  .animate(key: ValueKey(_permsDenied))
-                  .scale(
-                    delay: 100.ms,
-                    duration: 500.ms,
-                    curve: Curves.easeOutBack,
+    return Material(
+      color: c.surface,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(24, insets.top + 24, 24, insets.bottom + 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Spacer(),
+            Center(child: _Hero(denied: denied)),
+            const SizedBox(height: 36),
+            _OnboardingSwitcher(
+              child: Column(
+                key: ValueKey(denied),
+                children: [
+                  Text(
+                    denied ? 'Permission needed' : 'Welcome to Messages',
+                    textAlign: TextAlign.center,
+                    style: context.type.displaySmallEmphasized.copyWith(color: c.onSurface),
                   ),
-              const SizedBox(height: 28),
-              Text(
-                _permsDenied ? 'Permission required' : 'Welcome to Msgs',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
-                ),
-                textAlign: TextAlign.center,
-              ).animate(key: ValueKey('title_$_permsDenied')).fadeIn(delay: 200.ms),
-              const SizedBox(height: 14),
-              Text(
-                _permsDenied
-                    ? 'Msgs needs access to SMS and Contacts to work. Please grant these permissions.'
-                    : 'A beautiful, fast, and intelligent messaging experience — entirely on-device.',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.55,
-                ),
-                textAlign: TextAlign.center,
-              ).animate(key: ValueKey('sub_$_permsDenied')).fadeIn(delay: 300.ms),
-              if (_permsDenied) ...[
-                const SizedBox(height: 20),
-                // MIUI / OEM note
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
+                  const SizedBox(height: 12),
+                  Text(
+                    denied
+                        ? 'Messages needs access to SMS and Contacts to work. Please grant both.'
+                        : 'Fast, private texting with smart codes and payments, entirely on-device.',
+                    textAlign: TextAlign.center,
+                    style: context.text.bodyLarge?.copyWith(color: c.onSurfaceVariant),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          color: theme.colorScheme.primary, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'On MIUI / HyperOS / Funtouch OS you may need to '
-                          'approve SMS access manually in Settings → App permissions.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            height: 1.4,
+                  if (denied) ...[
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: ShapeDecoration(shape: Shapes.sheetGroup, color: context.groupContainer),
+                      child: Row(
+                        children: [
+                          const SettingIcon(Icons.info_outline_rounded),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              'On MIUI / HyperOS / Funtouch OS you may need to approve SMS access '
+                              'manually in Settings → App permissions.',
+                              style: context.text.bodyMedium?.copyWith(color: c.onSurfaceVariant),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                ).animate().fadeIn(delay: 400.ms),
-              ],
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: _isLoading
-                    ? null
-                    : (_permsDenied ? _openSettings : _requestPermissions),
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Icon(_permsDenied
-                        ? Icons.settings_rounded
-                        : Icons.arrow_forward_rounded),
-                label: Text(_permsDenied ? 'Open App Settings' : 'Get Started'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ).animate().fadeIn(delay: 500.ms),
-              if (_permsDenied) ...[
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: _isLoading ? null : _requestPermissions,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: const Text('Try again'),
-                ).animate().fadeIn(delay: 600.ms),
-              ],
-              const SizedBox(height: 12),
-            ],
-          ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const Spacer(),
+            BigActionButton(
+              text: denied ? 'Open app settings' : 'Get started',
+              icon: denied ? Icons.settings_rounded : Icons.arrow_forward_rounded,
+              loading: _isLoading,
+              onTap: denied ? _openSettings : _requestPermissions,
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              child: denied
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: BigActionButton(
+                        text: 'Try again',
+                        container: c.primaryContainer,
+                        content: c.onPrimaryContainer,
+                        onTap: _isLoading ? null : _requestPermissions,
+                      ),
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// Onboarding swap: spring slide + 220ms fade.
+class _OnboardingSwitcher extends StatelessWidget {
+  const _OnboardingSwitcher({required this.child});
+  final Widget child;
+
+  static final _curve = SpringCurve(Motion.onboarding);
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: _curve.settleDuration,
+    switchInCurve: _curve,
+    switchOutCurve: Curves.easeIn,
+    layoutBuilder: (current, previous) => Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
+    transitionBuilder: (child, anim) {
+      final incoming = child.key == this.child.key;
+      return FadeTransition(
+        opacity: CurvedAnimation(parent: anim, curve: const Interval(0, .35)),
+        child: SlideTransition(
+          position: Tween(begin: Offset(incoming ? .25 : -.25, 0), end: Offset.zero).animate(anim),
+          child: child,
+        ),
+      );
+    },
+    child: child,
+  );
+}
+
+/// Rotating Cookie12 (primaryContainer, 220dp) with a counter-rotating Sunny (primary, 120dp).
+/// 24s linear rotation; the whole thing breathes .96–1.04 over 2.2s.
+class _Hero extends StatefulWidget {
+  const _Hero({required this.denied});
+  final bool denied;
+
+  @override
+  State<_Hero> createState() => _HeroState();
+}
+
+class _HeroState extends State<_Hero> with TickerProviderStateMixin {
+  late final _spin = AnimationController(vsync: this, duration: const Duration(seconds: 24))..repeat();
+  late final _breathe = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    _breathe.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final bg = widget.denied ? c.errorContainer : c.primaryContainer;
+    final fg = widget.denied ? c.error : c.primary;
+    final onFg = widget.denied ? c.onError : c.onPrimary;
+    return AnimatedBuilder(
+      animation: Listenable.merge([_spin, _breathe]),
+      builder: (context, _) {
+        final a = _spin.value * 2 * math.pi;
+        final s = .96 + .08 * Curves.easeInOut.transform(_breathe.value);
+        return Transform.scale(
+          scale: s,
+          child: SizedBox.square(
+            dimension: 220,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Transform.rotate(
+                  angle: a,
+                  child: AnimatedContainer(
+                    duration: Motion.colour,
+                    width: 220,
+                    height: 220,
+                    decoration: ShapeDecoration(shape: CookieBorder.cookie12, color: bg),
+                  ),
+                ),
+                Transform.rotate(
+                  angle: -a * 1.5,
+                  child: AnimatedContainer(
+                    duration: Motion.colour,
+                    width: 120,
+                    height: 120,
+                    decoration: ShapeDecoration(shape: CookieBorder.sunny, color: fg),
+                  ),
+                ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                  child: Icon(
+                    widget.denied ? Icons.lock_rounded : Icons.chat_bubble_rounded,
+                    key: ValueKey(widget.denied),
+                    size: 48,
+                    color: onFg,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
