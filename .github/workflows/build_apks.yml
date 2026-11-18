@@ -19,13 +19,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      # JDK 21: Android lint (lintVitalAnalyzeRelease) calls List.removeLast(), which only exists
+      # on Java 21+, and crashes on JDK 17. The app still compiles to Java 17 bytecode.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
         with:
           distribution: "zulu"
-          java-version: "17"
+          java-version: "21"
           cache: "gradle"
 
       - name: Set up Flutter

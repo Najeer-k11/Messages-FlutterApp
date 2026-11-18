@@ -1029,7 +1029,13 @@ class _ExpressiveLoadingIndicatorState extends State<ExpressiveLoadingIndicator>
 }
 
 /// Floating snackbar; [aboveDock] lifts it clear of the floating dock.
-void showExpressiveSnack(BuildContext context, String message, {bool aboveDock = false}) {
+void showExpressiveSnack(
+  BuildContext context,
+  String message, {
+  bool aboveDock = false,
+  String? actionLabel,
+  VoidCallback? onAction,
+}) {
   final bottom = aboveDock ? kDockReserve + MediaQuery.paddingOf(context).bottom - 8 : 16.0;
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
@@ -1037,7 +1043,8 @@ void showExpressiveSnack(BuildContext context, String message, {bool aboveDock =
       SnackBar(
         content: Text(message),
         margin: EdgeInsets.fromLTRB(16, 0, 16, bottom),
-        duration: const Duration(seconds: 2),
+        duration: Duration(seconds: onAction == null ? 2 : 4),
+        action: onAction == null ? null : SnackBarAction(label: actionLabel ?? 'Undo', onPressed: onAction),
       ),
     );
 }

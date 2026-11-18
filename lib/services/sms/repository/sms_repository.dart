@@ -4,6 +4,8 @@ import 'package:isar_community/isar.dart';
 import 'package:msgs/services/sms/models/message_model.dart';
 import 'package:msgs/services/sms/models/read_state_model.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';
+import 'package:msgs/services/sms/models/thread_prefs_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SmsRepository {
   static const MethodChannel _channel = MethodChannel('com.msgs.ndevmsgs/sms');
@@ -21,6 +23,8 @@ class SmsRepository {
 
   SmsRepository({required this.isar}) {
     _channel.setMethodCallHandler(_handleMethodCall);
+    // Re-send the mute list on start, in case the native copy was cleared (app data, upgrade).
+    _syncSilenced();
   }
 
   Future<dynamic> _handleMethodCall(MethodCall call) async {
@@ -82,7 +86,13 @@ class SmsRepository {
         }
       }
 
+      // Conversations with blocked senders stay in the provider (unblocking brings them back)
+      // but are kept out of the inbox.
+      final blocked = await _blockedAmong({for (final item in result) (item as Map)['address'] as String});
+
       final Map<String, ThreadModel> threadsMap = {};
+      // Newest received message per conversation, to bring archived conversations back.
+      final Map<String, DateTime> lastReceived = {};
       final List<MessageModel> messagesToSave = [];
       // The app's own read state wins over the provider's flag, which our writes may not reach.
       final readStates = {for (final r in await isar.readStateModels.where().findAll()) r.address: r};
@@ -100,6 +110,7 @@ class SmsRepository {
         final nativeThreadId = map['thread_id'] as String? ?? '';
 
         if (isPromotionalSender(rawAddress)) continue;
+        if (blocked.contains(rawAddress)) continue;
         if (type == 3) continue; // drafts are not conversation messages
         final media = (map['media'] as List?)?.cast<String>() ?? const <String>[];
 
@@ -125,7 +136,10 @@ class SmsRepository {
           ..isRead = isRead
           ..media = media
           ..pending = type == 4 || type == 6
-          ..failed = type == 5;
+          ..failed = type == 5
+          ..delivered = type == 2 && map['status'] == 0;
+
+        if (!isMe && (lastReceived[address]?.isBefore(timestamp) ?? true)) lastReceived[address] = timestamp;
 
         messagesToSave.add(message);
 
@@ -166,6 +180,15 @@ class SmsRepository {
 
         await isar.threadModels.putAll(threadsMap.values.toList());
         await isar.messageModels.putAll(messagesToSave);
+
+        // A new message in an archived conversation brings it back, unless it is muted or spam.
+        final archived = await isar.threadPrefsModels.filter().archivedAtIsNotNull().findAll();
+        final revived = [
+          for (final p in archived)
+            if (!p.muted && !p.spam && (lastReceived[p.address]?.isAfter(p.archivedAt!) ?? false))
+              p..archivedAt = null,
+        ];
+        if (revived.isNotEmpty) await isar.threadPrefsModels.putAll(revived);
       });
     } catch (e) {
       throw Exception("Failed to sync SMS: $e");
@@ -312,8 +335,10 @@ class SmsRepository {
         await isar.messageModels.filter().threadAddressEqualTo(address).deleteAll();
         await isar.threadModels.filter().addressEqualTo(address).deleteAll();
         await isar.readStateModels.filter().addressEqualTo(address).deleteAll();
+        await isar.threadPrefsModels.filter().addressEqualTo(address).deleteAll();
       }
     });
+    await _syncSilenced();
   }
 
   /// Delete a thread natively from the Android SMS provider + local Isar
@@ -331,7 +356,9 @@ class SmsRepository {
       await isar.messageModels.filter().threadAddressEqualTo(normalized).deleteAll();
       await isar.threadModels.filter().addressEqualTo(normalized).deleteAll();
       await isar.readStateModels.filter().addressEqualTo(normalized).deleteAll();
+      await isar.threadPrefsModels.filter().addressEqualTo(normalized).deleteAll();
     });
+    await _syncSilenced();
   }
 
   /// Mark all messages in a thread as read — natively + in local Isar
@@ -483,6 +510,146 @@ class SmsRepository {
     await _channel.invokeMethod('addContact', {'phone': phone});
   }
 
+  // ── Per-conversation settings ────────────────────────────────────────────────────────────────
+
+  /// Every conversation's settings, keyed by normalized address. Emits on any change.
+  Stream<Map<String, ThreadPrefsModel>> watchPrefs() => isar.threadPrefsModels
+      .where()
+      .watch(fireImmediately: true)
+      .map((all) => {for (final p in all) p.address: p});
+
+  ThreadPrefsModel? prefsFor(String address) =>
+      isar.threadPrefsModels.filter().addressEqualTo(normalizeAddress(address)).findFirstSync();
+
+  /// Applies [change] to the settings of each of [addresses] in one transaction, dropping records
+  /// that end up empty.
+  Future<void> _updatePrefs(Iterable<String> addresses, void Function(ThreadPrefsModel p) change) async {
+    await isar.writeTxn(() async {
+      for (final address in addresses.map(normalizeAddress).toSet()) {
+        final p =
+            await isar.threadPrefsModels.filter().addressEqualTo(address).findFirst() ??
+            (ThreadPrefsModel()..address = address);
+        change(p);
+        if (p.isEmpty) {
+          if (p.id != Isar.autoIncrement) await isar.threadPrefsModels.delete(p.id);
+        } else {
+          await isar.threadPrefsModels.put(p);
+        }
+      }
+    });
+  }
+
+  Future<void> setPinned(Iterable<String> addresses, bool pinned) => _updatePrefs(addresses, (p) {
+    if (pinned) {
+      p.pinnedAt ??= DateTime.now().toUtc();
+      p.archivedAt = null;
+    } else {
+      p.pinnedAt = null;
+    }
+  });
+
+  Future<void> setArchived(Iterable<String> addresses, bool archived) => _updatePrefs(addresses, (p) {
+    if (archived) {
+      p.archivedAt = DateTime.now().toUtc();
+      p.pinnedAt = null;
+    } else {
+      p.archivedAt = null;
+    }
+  });
+
+  Future<void> setMuted(Iterable<String> addresses, bool muted) async {
+    await _updatePrefs(addresses, (p) => p.muted = muted);
+    await _syncSilenced();
+  }
+
+  /// Moves conversations to (or out of) the Spam folder. Spam never notifies.
+  Future<void> setSpam(Iterable<String> addresses, bool spam) async {
+    await _updatePrefs(addresses, (p) {
+      p.spam = spam;
+      if (spam) p.pinnedAt = p.archivedAt = null;
+    });
+    await _syncSilenced();
+  }
+
+  Future<void> saveDraft(String address, String text) async {
+    final draft = text.trim().isEmpty ? '' : text;
+    if ((prefsFor(address)?.draft ?? '') == draft) return;
+    await _updatePrefs([address], (p) => p.draft = draft);
+  }
+
+  /// Tells the native receivers which conversations must not notify.
+  Future<void> _syncSilenced() async {
+    try {
+      final quiet = await isar.threadPrefsModels.filter().mutedEqualTo(true).or().spamEqualTo(true).findAll();
+      await _channel.invokeMethod('setSilenced', {'addresses': [for (final p in quiet) p.address]});
+    } catch (_) {}
+  }
+
+  static const _deliveryReportsKey = 'delivery_reports';
+
+  Future<bool> deliveryReportsEnabled() async =>
+      (await SharedPreferences.getInstance()).getBool(_deliveryReportsKey) ?? true;
+
+  Future<void> setDeliveryReports(bool enabled) async =>
+      (await SharedPreferences.getInstance()).setBool(_deliveryReportsKey, enabled);
+
+  /// Whether this app may use the system block list (only as the default SMS app).
+  Future<bool> canBlockNumbers() async {
+    try {
+      return await _channel.invokeMethod<bool>('canBlockNumbers') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> isBlocked(String address) async {
+    try {
+      return await _channel.invokeMethod<bool>('isBlocked', {'address': address}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The raw addresses in [addresses] that are on the block list.
+  Future<Set<String>> _blockedAmong(Set<String> addresses) async {
+    if (addresses.isEmpty) return const {};
+    try {
+      final result = await _channel.invokeListMethod<String>('filterBlocked', {'addresses': addresses.toList()});
+      return {...?result};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Adds [address] to the system block list (shared with the Phone app) and drops its
+  /// conversation from the inbox. Messages stay on the device; unblocking restores them.
+  Future<void> blockNumber(String address) async {
+    final ok = await _channel.invokeMethod<bool>('blockNumber', {'address': address}) ?? false;
+    if (!ok) throw Exception('Number could not be blocked');
+    final normalized = normalizeAddress(address);
+    await isar.writeTxn(() async {
+      await isar.messageModels.filter().threadAddressEqualTo(normalized).deleteAll();
+      await isar.threadModels.filter().addressEqualTo(normalized).deleteAll();
+    });
+  }
+
+  /// Removes [address] from the block list and brings its conversation back.
+  Future<void> unblockNumber(String address) async {
+    await _channel.invokeMethod<bool>('unblockNumber', {'address': address});
+    await syncSms();
+  }
+
+  /// Numbers on the system block list, newest first.
+  Future<List<String>> getBlockedNumbers() async =>
+      await _channel.invokeListMethod<String>('getBlockedNumbers') ?? const [];
+
+  /// Opens the system contact picker; returns the chosen name and number, or null if cancelled.
+  Future<({String name, String number})?> pickContact() async {
+    final result = await _channel.invokeMapMethod<String, String>('pickContact');
+    if (result == null) return null;
+    return (name: result['name'] ?? '', number: result['number'] ?? '');
+  }
+
   /// Fetch device contacts via native MethodChannel
   Future<List<Map<String, String>>> getContacts() async {
     try {
@@ -618,7 +785,11 @@ class SmsRepository {
 
     // 2. Call Native API
     try {
-      await _channel.invokeMethod('sendSms', {'address': normalized, 'body': body});
+      await _channel.invokeMethod('sendSms', {
+        'address': normalized,
+        'body': body,
+        'deliveryReports': await deliveryReportsEnabled(),
+      });
     } catch (e) {
       // Revert optimistic insert on failure
       await isar.writeTxn(() async {

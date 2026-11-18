@@ -10,7 +10,10 @@ class Composer extends StatefulWidget {
   final void Function(String text, List<String> attachments) onSend;
   final String? initialText;
 
-  const Composer({super.key, required this.onSend, this.initialText});
+  /// Every edit to the text, for saving drafts.
+  final ValueChanged<String>? onChanged;
+
+  const Composer({super.key, required this.onSend, this.initialText, this.onChanged});
 
   @override
   State<Composer> createState() => _ComposerState();
@@ -35,6 +38,58 @@ class _ComposerState extends State<Composer> {
     } on PlatformException catch (e) {
       if (mounted) showExpressiveSnack(context, 'Couldn’t open photos: ${e.message}');
     }
+  }
+
+  /// Attaches a contact as plain text (name and number), which every phone can read over SMS.
+  Future<void> _attachContact() async {
+    try {
+      final picked = await context.read<SmsRepository>().pickContact();
+      if (picked == null || !mounted) return;
+      final card = picked.name.trim().isEmpty ? picked.number : '${picked.name.trim()}\n${picked.number}';
+      final value = _controller.value;
+      final sel = value.selection.isValid ? value.selection : TextSelection.collapsed(offset: value.text.length);
+      final before = value.text.substring(0, sel.start);
+      final after = value.text.substring(sel.end);
+      final insert = '${before.isEmpty || before.endsWith('\n') ? '' : '\n'}$card${after.isEmpty ? '' : '\n'}';
+      _controller.value = TextEditingValue(
+        text: before + insert + after,
+        selection: TextSelection.collapsed(offset: before.length + insert.length),
+      );
+    } on PlatformException catch (e) {
+      if (mounted) showExpressiveSnack(context, 'Couldn’t open contacts: ${e.message}');
+    }
+  }
+
+  void _showAttachSheet() {
+    showExpressiveSheet<void>(
+      context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: SheetGroup(
+          children: [
+            SheetActionRow(
+              icon: Icons.photo_outlined,
+              title: 'Photo',
+              subtitle: _attachments.length >= 3 ? 'Up to 3 photos per message' : 'Send as a picture message',
+              onTap: () {
+                Navigator.pop(ctx);
+                if (_attachments.length < 3) _attach();
+              },
+            ),
+            const SettingsDivider(),
+            SheetActionRow(
+              icon: Icons.contact_page_outlined,
+              title: 'Contact',
+              subtitle: 'Share a name and number',
+              onTap: () {
+                Navigator.pop(ctx);
+                _attachContact();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// SMS character limits: 160 per segment for GSM-7, 153 for multi-part
@@ -66,6 +121,7 @@ class _ComposerState extends State<Composer> {
       _hasText = widget.initialText!.isNotEmpty;
     }
     _controller.addListener(() {
+      widget.onChanged?.call(_controller.text);
       final hasText = _controller.text.isNotEmpty;
       if (_hasText != hasText) {
         setState(() => _hasText = hasText);
@@ -140,12 +196,12 @@ class _ComposerState extends State<Composer> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         RoundTonalButton(
-                          icon: Icons.add_photo_alternate_outlined,
-                          label: 'Attach photo',
+                          icon: Icons.add_rounded,
+                          label: 'Attach',
                           size: 44,
                           container: c.surfaceContainerHighest,
                           content: c.onSurfaceVariant,
-                          onTap: _attachments.length >= 3 ? null : _attach,
+                          onTap: _showAttachSheet,
                         ),
                         const SizedBox(width: 10),
                         Expanded(

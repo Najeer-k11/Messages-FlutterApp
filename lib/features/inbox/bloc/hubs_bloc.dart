@@ -104,7 +104,7 @@ class HubsBloc extends Bloc<HubsEvent, HubsState> {
     // Listen to InboxBloc changes
     _inboxSubscription = _inboxBloc.stream.listen((inboxState) {
       if (inboxState is InboxLoaded) {
-        add(ProcessThreadsEvent(threads: inboxState.threads));
+        add(ProcessThreadsEvent(threads: inboxState.notSpam));
       }
     });
 
@@ -116,7 +116,7 @@ class HubsBloc extends Bloc<HubsEvent, HubsState> {
     // Check initial state
     final initialState = _inboxBloc.state;
     if (initialState is InboxLoaded) {
-      add(ProcessThreadsEvent(threads: initialState.threads));
+      add(ProcessThreadsEvent(threads: initialState.notSpam));
     }
   }
 

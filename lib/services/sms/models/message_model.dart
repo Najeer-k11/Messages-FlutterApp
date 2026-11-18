@@ -25,4 +25,7 @@ class MessageModel {
 
   /// Outgoing message that failed to send.
   bool failed = false;
+
+  /// Outgoing SMS the carrier confirmed was delivered (delivery report received).
+  bool delivered = false;
 }

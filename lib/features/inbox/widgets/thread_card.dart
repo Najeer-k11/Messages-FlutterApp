@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:msgs/features/inbox/bloc/inbox_bloc.dart';
 import 'package:msgs/features/inbox/bloc/inbox_event.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';
+import 'package:msgs/services/sms/models/thread_prefs_model.dart';
+import 'package:msgs/features/inbox/thread_actions.dart';
 import 'package:msgs/services/sms/repository/sms_repository.dart';
 import 'package:msgs/ui/ui.dart';
 
@@ -71,23 +73,37 @@ class ThreadAvatar extends StatelessWidget {
 
 class ThreadCard extends StatelessWidget {
   final ThreadModel thread;
+
+  /// This conversation's settings (pinned, muted, draft…), if it has any.
+  final ThreadPrefsModel? prefs;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final bool isSelected;
   final bool isSelecting;
 
-  /// Swipe-to-delete. Off where deleting would be surprising (search results).
+  /// Swipe actions (archive one way, delete the other). Off where they would be surprising
+  /// (search results).
   final bool dismissible;
+
+  /// Snackbars sit above the floating dock (inbox) rather than at the screen edge.
+  final bool snackAboveDock;
 
   const ThreadCard({
     super.key,
     required this.thread,
+    this.prefs,
     required this.onTap,
     this.onLongPress,
     this.isSelected = false,
     this.isSelecting = false,
     this.dismissible = true,
+    this.snackAboveDock = false,
   });
+
+  bool get _pinned => prefs?.pinned ?? false;
+  bool get _archived => prefs?.archived ?? false;
+  bool get _muted => prefs?.muted ?? false;
+  bool get _spam => prefs?.spam ?? false;
 
   Future<bool> _confirmDelete(BuildContext context) => showConfirmDialog(
     context,
@@ -101,69 +117,103 @@ class ThreadCard extends StatelessWidget {
     final hasUnread = thread.unreadCount > 0;
     final repo = context.read<SmsRepository>();
     final inboxBloc = context.read<InboxBloc>();
+    final addresses = [thread.address];
 
     showExpressiveSheet<void>(
       context,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DetailsHeader(
-              badge: ShapeBox(
-                size: 52,
-                shape: CookieBorder.cookie7,
-                color: ctx.colors.primaryContainer,
-                child: Text(
-                  _initial(thread.senderName),
-                  style: ctx.type.titleLargeEmphasized.copyWith(color: ctx.colors.onPrimaryContainer),
+      builder: (ctx) {
+        void run(VoidCallback action) {
+          Navigator.pop(ctx);
+          action();
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DetailsHeader(
+                badge: ShapeBox(
+                  size: 52,
+                  shape: CookieBorder.cookie7,
+                  color: ctx.colors.primaryContainer,
+                  child: Text(
+                    _initial(thread.senderName),
+                    style: ctx.type.titleLargeEmphasized.copyWith(color: ctx.colors.onPrimaryContainer),
+                  ),
                 ),
+                title: thread.senderName,
+                subtitle: thread.senderName == thread.address ? null : thread.address,
               ),
-              title: thread.senderName,
-              subtitle: thread.senderName == thread.address ? null : thread.address,
-            ),
-            SheetGroup(
-              children: [
-                SheetActionRow(
-                  icon: hasUnread ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined,
-                  title: hasUnread ? 'Mark as read' : 'Mark as unread',
-                  onTap: () async {
-                    Navigator.pop(ctx);
-                    if (hasUnread) {
-                      await repo.markThreadAsRead(thread.address, thread.nativeThreadId);
-                    } else {
-                      await repo.markThreadAsUnread(thread.address, thread.nativeThreadId);
-                    }
-                  },
-                ),
-                const SettingsDivider(),
-                SheetActionRow(
-                  icon: Icons.check_circle_outline_rounded,
-                  title: 'Select',
-                  subtitle: 'Pick several conversations at once',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    onLongPress?.call();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            BigActionButton(
-              text: 'Delete conversation',
-              icon: Icons.delete_outline_rounded,
-              container: ctx.colors.errorContainer,
-              content: ctx.colors.onErrorContainer,
-              onTap: () async {
-                Navigator.pop(ctx);
-                if (await _confirmDelete(context)) {
-                  inboxBloc.add(DeleteThreadEvent(address: thread.address, nativeThreadId: thread.nativeThreadId));
-                }
-              },
-            ),
-          ],
-        ),
-      ),
+              SheetGroup(
+                children: [
+                  if (!_spam && !_archived) ...[
+                    SheetActionRow(
+                      icon: _pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                      title: _pinned ? 'Unpin' : 'Pin to top',
+                      onTap: () => run(() => repo.setPinned(addresses, !_pinned)),
+                    ),
+                    const SettingsDivider(),
+                  ],
+                  SheetActionRow(
+                    icon: hasUnread ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined,
+                    title: hasUnread ? 'Mark as read' : 'Mark as unread',
+                    onTap: () => run(() {
+                      hasUnread
+                          ? repo.markThreadAsRead(thread.address, thread.nativeThreadId)
+                          : repo.markThreadAsUnread(thread.address, thread.nativeThreadId);
+                    }),
+                  ),
+                  const SettingsDivider(),
+                  SheetActionRow(
+                    icon: _muted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
+                    title: _muted ? 'Unmute' : 'Mute',
+                    subtitle: _muted ? null : 'No notifications from this conversation',
+                    onTap: () => run(() => setThreadsMuted(context, addresses, !_muted, aboveDock: snackAboveDock)),
+                  ),
+                  if (!_spam) ...[
+                    const SettingsDivider(),
+                    SheetActionRow(
+                      icon: _archived ? Icons.unarchive_outlined : Icons.archive_outlined,
+                      title: _archived ? 'Unarchive' : 'Archive',
+                      onTap: () => run(() => setThreadsArchived(context, addresses, !_archived, aboveDock: snackAboveDock)),
+                    ),
+                  ],
+                  const SettingsDivider(),
+                  SheetActionRow(
+                    icon: _spam ? Icons.report_off_outlined : Icons.report_outlined,
+                    title: _spam ? 'Not spam' : 'Report spam',
+                    subtitle: _spam ? 'Move back to your inbox' : 'Move to Spam and stop notifications',
+                    onTap: () => run(() => setThreadsSpam(context, addresses, !_spam, aboveDock: snackAboveDock)),
+                  ),
+                  if (onLongPress != null) ...[
+                    const SettingsDivider(),
+                    SheetActionRow(
+                      icon: Icons.check_circle_outline_rounded,
+                      title: 'Select',
+                      subtitle: 'Pick several conversations at once',
+                      onTap: () => run(onLongPress!),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              BigActionButton(
+                text: 'Delete conversation',
+                icon: Icons.delete_outline_rounded,
+                container: ctx.colors.errorContainer,
+                content: ctx.colors.onErrorContainer,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  if (await _confirmDelete(context)) {
+                    inboxBloc.add(DeleteThreadEvent(address: thread.address, nativeThreadId: thread.nativeThreadId));
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -185,6 +235,7 @@ class ThreadCard extends StatelessWidget {
     final c = context.colors;
     final hasUnread = thread.unreadCount > 0;
     final tileColor = isSelected ? c.primaryContainer : context.groupContainer.withValues(alpha: .94);
+    final draft = prefs?.draft ?? '';
 
     final card = LuminousElastic.tile(
       onTap: onTap,
@@ -229,6 +280,14 @@ class ThreadCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (_muted) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.notifications_off_outlined, size: 16, color: c.onSurfaceVariant, semanticLabel: 'Muted'),
+                      ],
+                      if (_pinned) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.push_pin_rounded, size: 16, color: c.primary, semanticLabel: 'Pinned'),
+                      ],
                       const SizedBox(width: 8),
                       Text(
                         _formatTime(thread.timestamp),
@@ -243,7 +302,22 @@ class ThreadCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Expanded(
-                        child: _Preview(thread: thread, unread: hasUnread),
+                        child: draft.isNotEmpty
+                            ? Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Draft: ',
+                                      style: context.type.bodyMediumEmphasized.copyWith(color: c.error),
+                                    ),
+                                    TextSpan(text: draft.replaceAll('\n', ' ')),
+                                  ],
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: context.text.bodyMedium?.copyWith(color: c.onSurfaceVariant),
+                              )
+                            : _Preview(thread: thread, unread: hasUnread),
                       ),
                       if (hasUnread) ...[
                         const SizedBox(width: 10),
@@ -272,21 +346,79 @@ class ThreadCard extends StatelessWidget {
     final padded = Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: card);
     if (isSelecting || !dismissible) return padded;
 
+    // Swipe right: archive (unarchive in Archived, "not spam" in Spam). Swipe left: delete.
+    final (IconData swipeIcon, String swipeLabel) = _spam
+        ? (Icons.report_off_outlined, 'Not spam')
+        : _archived
+        ? (Icons.unarchive_outlined, 'Unarchive')
+        : (Icons.archive_outlined, 'Archive');
+
     return Dismissible(
       key: Key('thread_${thread.address}'),
-      direction: DismissDirection.endToStart,
-      confirmDismiss: (_) => _confirmDelete(context),
-      onDismissed: (_) => context.read<InboxBloc>().add(
-        DeleteThreadEvent(address: thread.address, nativeThreadId: thread.nativeThreadId),
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.endToStart) return _confirmDelete(context);
+        HapticFeedback.mediumImpact();
+        return true;
+      },
+      onDismissed: (direction) {
+        if (direction == DismissDirection.endToStart) {
+          context.read<InboxBloc>().add(DeleteThreadEvent(address: thread.address, nativeThreadId: thread.nativeThreadId));
+        } else if (_spam) {
+          setThreadsSpam(context, [thread.address], false, aboveDock: snackAboveDock);
+        } else {
+          setThreadsArchived(context, [thread.address], !_archived, aboveDock: snackAboveDock);
+        }
+      },
+      background: _SwipeBackground(
+        icon: swipeIcon,
+        label: swipeLabel,
+        alignment: Alignment.centerLeft,
+        color: c.tertiaryContainer,
+        content: c.onTertiaryContainer,
       ),
-      background: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        decoration: ShapeDecoration(shape: Shapes.tile, color: c.errorContainer),
+      secondaryBackground: _SwipeBackground(
+        icon: Icons.delete_outline_rounded,
+        label: 'Delete',
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        child: Icon(Icons.delete_outline_rounded, color: c.onErrorContainer, size: 28),
+        color: c.errorContainer,
+        content: c.onErrorContainer,
       ),
       child: padded,
+    );
+  }
+}
+
+class _SwipeBackground extends StatelessWidget {
+  const _SwipeBackground({
+    required this.icon,
+    required this.label,
+    required this.alignment,
+    required this.color,
+    required this.content,
+  });
+
+  final IconData icon;
+  final String label;
+  final Alignment alignment;
+  final Color color;
+  final Color content;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = [
+      Icon(icon, color: content, size: 26),
+      const SizedBox(width: 10),
+      Text(label, style: context.type.labelLargeEmphasized.copyWith(color: content)),
+    ];
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: ShapeDecoration(shape: Shapes.tile, color: color),
+      alignment: alignment,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: alignment == Alignment.centerLeft ? children : children.reversed.toList(),
+      ),
     );
   }
 }

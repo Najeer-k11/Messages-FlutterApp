@@ -3,6 +3,7 @@ import 'package:material_color_utilities/material_color_utilities.dart';
 import 'package:msgs/features/banking/widgets/transaction_card.dart';
 import 'package:msgs/services/sms/categorization/message_classifier.dart';
 import 'package:msgs/services/sms/categorization/otp_parser.dart';
+import 'package:msgs/services/sms/categorization/scam_detector.dart';
 import 'package:msgs/services/sms/models/read_state_model.dart';
 import 'package:msgs/services/sms/repository/sms_repository.dart';
 import 'package:msgs/services/wallpaper/wallpaper_colors.dart';
@@ -145,6 +146,36 @@ void main() {
     test('without a record the provider decides', () {
       expect(state().isRead(t0, providerRead: true), isTrue);
       expect(state().isRead(t0, providerRead: false), isFalse);
+    });
+  });
+
+  group('ScamDetector', () {
+    test('flags fake KYC and parcel texts with links from phone numbers', () {
+      expect(
+        ScamDetector.isSuspicious('Dear customer your KYC update pending, account will be blocked today. https://sbi-kyc.co/x', '+919812345678'),
+        isTrue,
+      );
+      expect(ScamDetector.isSuspicious('Your parcel is on hold. Pay fee: bit.ly/3xYz', '+447700900123'), isTrue);
+    });
+
+    test('flags IP, punycode and throwaway-domain links from anyone', () {
+      expect(ScamDetector.isSuspicious('Login now http://192.168.4.20/login', 'AX-BANK'), isTrue);
+      expect(ScamDetector.isSuspicious('Refund ready: https://xn--pypal-4ve.com/r', 'VM-SHOPS'), isTrue);
+      expect(ScamDetector.isSuspicious('Track at https://ups-track.top/a1', '+15551234567'), isTrue);
+    });
+
+    test('leaves normal messages alone', () {
+      expect(ScamDetector.isSuspicious('Rs 500 debited from a/c XX12. Not you? Call 1800', 'AX-HDFCBK'), isFalse);
+      expect(ScamDetector.isSuspicious('Update KYC at https://hdfcbk.io/k', 'AX-HDFCBK-S'), isFalse);
+      expect(ScamDetector.isSuspicious('look at this https://youtube.com/watch?v=1', '+919812345678'), isFalse);
+      expect(ScamDetector.isSuspicious('Congratulations on the new job!', '+919812345678'), isFalse);
+    });
+
+    test('never flags saved contacts', () {
+      expect(
+        ScamDetector.isSuspicious('claim your prize bit.ly/x', '+919812345678', knownContact: true),
+        isFalse,
+      );
     });
   });
 }

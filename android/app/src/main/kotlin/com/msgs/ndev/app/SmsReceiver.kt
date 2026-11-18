@@ -47,6 +47,10 @@ class SmsReceiver : BroadcastReceiver() {
                 val body = messages.joinToString(separator = "") { it.displayMessageBody }
                 val timestamp = messages[0].timestampMillis
 
+                // Blocked sender: the telephony stack normally drops these already; if one slips
+                // through, neither store nor notify.
+                if (BlockedNumbers.isBlocked(context, sender)) return
+
                 // Skip promotional messages — just don't notify, don't delete. DLT sender IDs end
                 // in a category suffix: -P promotional, -S service, -T transactional, -G government.
                 // Only -P is promotional; OTPs and bank alerts (-S / -T) must still notify.
@@ -122,6 +126,8 @@ class SmsReceiver : BroadcastReceiver() {
 
     /** Also used by [MmsStatusReceiver] for incoming MMS. */
     fun showNotification(context: Context, sender: String, body: String) {
+        // Muted or reported as spam: the message is stored, but stays quiet.
+        if (SilencedThreads.isSilenced(context, sender)) return
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // Create notification channel

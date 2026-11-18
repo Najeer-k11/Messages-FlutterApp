@@ -7,6 +7,8 @@ import 'package:msgs/features/banking/widgets/transaction_card.dart';
 import 'package:msgs/features/compose/compose_screen.dart';
 import 'package:msgs/features/conversation/conversation_screen.dart';
 import 'package:msgs/features/inbox/bloc/hubs_bloc.dart';
+import 'package:msgs/features/inbox/folder_screen.dart';
+import 'package:msgs/features/inbox/thread_actions.dart';
 import 'package:msgs/features/inbox/bloc/inbox_bloc.dart';
 import 'package:msgs/features/inbox/bloc/inbox_event.dart';
 import 'package:msgs/features/inbox/bloc/inbox_state.dart';
@@ -98,7 +100,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
       final normalizedAddress = SmsRepository.normalizeAddress(address);
       final state = context.read<InboxBloc>().state;
       if (state is InboxLoaded) {
-        final existingThread = state.threads.cast<ThreadModel?>().firstWhere(
+        final existingThread = [...state.threads, ...state.archived, ...state.spam].cast<ThreadModel?>().firstWhere(
           (t) => t != null && (SmsRepository.normalizeAddress(t.address) == normalizedAddress || t.address == address),
           orElse: () => null,
         );
@@ -158,6 +160,42 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
       context,
       unread == 0 ? 'Already read' : 'Marked $unread conversation${unread == 1 ? '' : 's'} as read',
       aboveDock: true,
+    );
+  }
+
+  Future<void> _archiveSelected() async {
+    final addresses = _selectedAddresses.toList();
+    _clearSelection();
+    await setThreadsArchived(context, addresses, true, aboveDock: true);
+  }
+
+  void _showFolders(InboxState state) {
+    final loaded = state is InboxLoaded ? state : null;
+    showExpressiveSheet<void>(
+      context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: SheetGroup(
+          children: [
+            for (final (i, folder) in ThreadFolder.values.indexed) ...[
+              if (i > 0) const SettingsDivider(),
+              SheetActionRow(
+                icon: folder.icon,
+                title: folder.title,
+                subtitle: switch (loaded == null ? 0 : folder.of(loaded).length) {
+                  0 => 'Empty',
+                  1 => '1 conversation',
+                  final n => '$n conversations',
+                },
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context, MaterialPageRoute<void>(builder: (_) => FolderScreen(folder: folder)));
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -247,6 +285,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                     child: _TopRow(
                       selecting: _isSelecting,
                       onCancelSelection: _clearSelection,
+                      onFolders: () => _showFolders(state),
                       onSettings: () => Navigator.push(context, settingsRoute()),
                     ),
                   ),
@@ -258,7 +297,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                     child: Center(
                       child: ExpressiveDock(
                         selected: _tab.index,
-                        onSelect: (i) => _onDockSelect(i, threads),
+                        onSelect: (i) => _onDockSelect(i, state is InboxLoaded ? state.notSpam : threads),
                         showAdd: !_isSelecting && _tab != _Tab.money,
                         addLabel: 'New message',
                         onAdd: () => showComposeSheet(context),
@@ -405,6 +444,7 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                 label: 'Mark selected as read',
                 onTap: () => _markSelectedRead(allThreads),
               ),
+              RoundTonalButton(icon: Icons.archive_outlined, label: 'Archive selected', onTap: _archiveSelected),
               RoundTonalButton(
                 icon: Icons.delete_outline_rounded,
                 label: 'Delete selected',
@@ -436,9 +476,12 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
                   itemCount: threads.length,
                   itemBuilder: (context, index) {
                     final thread = threads[index];
+                    final inbox = context.read<InboxBloc>().state;
                     return ThreadCard(
                       key: ValueKey(thread.address),
                       thread: thread,
+                      prefs: inbox is InboxLoaded ? inbox.prefsFor(thread.address) : null,
+                      snackAboveDock: true,
                       isSelected: _selectedAddresses.contains(thread.address),
                       isSelecting: _isSelecting,
                       onTap: () => _isSelecting ? _toggleSelection(thread) : _openThread(thread),
@@ -499,10 +542,16 @@ class _InboxScreenState extends State<InboxScreen> with WidgetsBindingObserver {
 }
 
 class _TopRow extends StatelessWidget {
-  const _TopRow({required this.selecting, required this.onCancelSelection, required this.onSettings});
+  const _TopRow({
+    required this.selecting,
+    required this.onCancelSelection,
+    required this.onFolders,
+    required this.onSettings,
+  });
 
   final bool selecting;
   final VoidCallback onCancelSelection;
+  final VoidCallback onFolders;
   final VoidCallback onSettings;
 
   static final _pillCurve = SpringCurve(Motion.pillAppear);
@@ -536,12 +585,24 @@ class _TopRow extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           child: IgnorePointer(
             ignoring: selecting,
-            child: RoundTonalButton(
-              icon: Icons.settings_outlined,
-              label: 'Settings',
-              onTap: onSettings,
-              container: c.surfaceContainerHigh,
-              content: c.onSurface,
+            child: Row(
+              children: [
+                RoundTonalButton(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Archived and spam',
+                  onTap: onFolders,
+                  container: c.surfaceContainerHigh,
+                  content: c.onSurface,
+                ),
+                const SizedBox(width: 8),
+                RoundTonalButton(
+                  icon: Icons.settings_outlined,
+                  label: 'Settings',
+                  onTap: onSettings,
+                  container: c.surfaceContainerHigh,
+                  content: c.onSurface,
+                ),
+              ],
             ),
           ),
         ),

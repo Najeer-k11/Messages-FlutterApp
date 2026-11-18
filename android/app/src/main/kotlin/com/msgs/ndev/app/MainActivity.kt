@@ -30,7 +30,9 @@ class MainActivity: FlutterActivity() {
     private var smsObserver: ContentObserver? = null
     private var pendingIntentData: Map<String, String>? = null
     private var pendingPick: MethodChannel.Result? = null
+    private var pendingContactPick: MethodChannel.Result? = null
     private val PICK_MEDIA_REQUEST = 4101
+    private val PICK_CONTACT_REQUEST = 4102
     private val MAX_ATTACHMENTS = 3
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -183,7 +185,7 @@ class MainActivity: FlutterActivity() {
                     val address = call.argument<String>("address")
                     val body = call.argument<String>("body")
                     if (address != null && body != null) {
-                        sendSms(address, body, result)
+                        sendSms(address, body, call.argument<Boolean>("deliveryReports") ?: true, result)
                     } else {
                         result.error("INVALID_ARGS", "Address or body is null", null)
                     }
@@ -318,6 +320,53 @@ class MainActivity: FlutterActivity() {
                         result.error("ADD_CONTACT_ERROR", e.message, null)
                     }
                 }
+                "setSilenced" -> {
+                    SilencedThreads.set(this, call.argument<List<String>>("addresses").orEmpty())
+                    result.success(true)
+                }
+                "canBlockNumbers" -> result.success(BlockedNumbers.canBlock(this))
+                "isBlocked" -> {
+                    val address = call.argument<String>("address").orEmpty()
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val blocked = BlockedNumbers.isBlocked(this@MainActivity, address)
+                        withContext(Dispatchers.Main) { result.success(blocked) }
+                    }
+                }
+                "filterBlocked" -> {
+                    // Which of these addresses are on the block list (system number matching).
+                    val addresses = call.argument<List<String>>("addresses").orEmpty()
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val blocked = if (BlockedNumbers.canBlock(this@MainActivity)) {
+                            addresses.filter { BlockedNumbers.isBlocked(this@MainActivity, it) }
+                        } else emptyList()
+                        withContext(Dispatchers.Main) { result.success(blocked) }
+                    }
+                }
+                "blockNumber", "unblockNumber" -> {
+                    val address = call.argument<String>("address").orEmpty()
+                    val block = call.method == "blockNumber"
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            val ok = if (block) BlockedNumbers.block(this@MainActivity, address)
+                                     else BlockedNumbers.unblock(this@MainActivity, address)
+                            if (ok && block) cancelNotificationFor(address)
+                            withContext(Dispatchers.Main) { result.success(ok) }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) { result.error("BLOCK_ERROR", e.message, null) }
+                        }
+                    }
+                }
+                "getBlockedNumbers" -> {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            val list = BlockedNumbers.list(this@MainActivity)
+                            withContext(Dispatchers.Main) { result.success(list) }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) { result.error("BLOCK_ERROR", e.message, null) }
+                        }
+                    }
+                }
+                "pickContact" -> pickContact(result)
                 "getContacts" -> {
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
@@ -437,6 +486,7 @@ class MainActivity: FlutterActivity() {
             Telephony.Sms.TYPE,
             Telephony.Sms.READ,
             Telephony.Sms.THREAD_ID,
+            Telephony.Sms.STATUS,
         )
 
         try {
@@ -448,6 +498,7 @@ class MainActivity: FlutterActivity() {
                 val typeIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.TYPE)
                 val readIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.READ)
                 val threadIdIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
+                val statusIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.STATUS)
 
                 while (cursor.moveToNext()) {
                     val address = cursor.getString(addressIndex) ?: "Unknown"
@@ -458,7 +509,9 @@ class MainActivity: FlutterActivity() {
                         "date" to cursor.getLong(dateIndex),
                         "type" to cursor.getInt(typeIndex),
                         "read" to cursor.getInt(readIndex),
-                        "thread_id" to (cursor.getString(threadIdIndex) ?: "")
+                        "thread_id" to (cursor.getString(threadIdIndex) ?: ""),
+                        // -1 none, 0 delivered, 32 pending, 64 failed.
+                        "status" to cursor.getInt(statusIndex),
                     ))
                 }
             }
@@ -597,10 +650,47 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    /** System contact picker for one phone number. The picked Uri carries a temporary read grant. */
+    private fun pickContact(result: MethodChannel.Result) {
+        pendingContactPick?.success(null)
+        pendingContactPick = result
+        val intent = Intent(Intent.ACTION_PICK).apply {
+            type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE
+        }
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, PICK_CONTACT_REQUEST)
+        } catch (e: Exception) {
+            pendingContactPick = null
+            result.error("PICK_ERROR", e.message, null)
+        }
+    }
+
+    private fun readPickedContact(uri: Uri): Map<String, String>? {
+        val projection = arrayOf(
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+            ContactsContract.CommonDataKinds.Phone.NUMBER,
+        )
+        return contentResolver.query(uri, projection, null, null, null)?.use { c ->
+            if (!c.moveToFirst()) return@use null
+            val name = c.getString(0).orEmpty()
+            val number = c.getString(1).orEmpty()
+            if (number.isBlank()) null else mapOf("name" to name, "number" to number)
+        }
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PICK_CONTACT_REQUEST) {
+            val picked = data?.data.takeIf { resultCode == RESULT_OK }?.let {
+                try { readPickedContact(it) } catch (_: Exception) { null }
+            }
+            pendingContactPick?.success(picked)
+            pendingContactPick = null
+            return
+        }
         if (requestCode != PICK_MEDIA_REQUEST) return
         val uris = mutableListOf<String>()
         if (resultCode == RESULT_OK && data != null) {
@@ -685,7 +775,7 @@ class MainActivity: FlutterActivity() {
         return contacts
     }
 
-    private fun sendSms(address: String, body: String, result: MethodChannel.Result) {
+    private fun sendSms(address: String, body: String, deliveryReports: Boolean, result: MethodChannel.Result) {
         try {
             val smsManager: SmsManager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                 getSystemService(SmsManager::class.java) ?: SmsManager.getDefault()
@@ -717,14 +807,22 @@ class MainActivity: FlutterActivity() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
+            val delivery = deliveredPendingIntent.takeIf { deliveryReports }
             val parts = smsManager.divideMessage(body)
             if (parts.size > 1) {
                 val sentIntents = ArrayList<PendingIntent>(parts.size).also { list ->
                     repeat(parts.size) { list.add(sentPendingIntent) }
                 }
-                smsManager.sendMultipartTextMessage(address, null, parts, sentIntents, null)
+                // Only the last part reports delivery, so "Delivered" means the whole message arrived.
+                val deliveryIntents = delivery?.let { d ->
+                    ArrayList<PendingIntent?>(parts.size).also { list ->
+                        repeat(parts.size - 1) { list.add(null) }
+                        list.add(d)
+                    }
+                }
+                smsManager.sendMultipartTextMessage(address, null, parts, sentIntents, deliveryIntents)
             } else {
-                smsManager.sendTextMessage(address, null, body, sentPendingIntent, deliveredPendingIntent)
+                smsManager.sendTextMessage(address, null, body, sentPendingIntent, delivery)
             }
             result.success(true)
         } catch (e: Exception) {

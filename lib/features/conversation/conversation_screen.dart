@@ -10,6 +10,9 @@ import 'package:msgs/features/inbox/widgets/thread_card.dart' show ThreadAvatar;
 import 'package:msgs/ui/ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:msgs/features/inbox/thread_actions.dart';
+import 'package:msgs/services/sms/categorization/scam_detector.dart';
 
 class ConversationScreen extends StatefulWidget {
   final ThreadModel thread;
@@ -26,6 +29,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
   StreamSubscription<bool>? _mmsResults;
   StreamSubscription<List<MessageModel>>? _incoming;
   bool _marking = false;
+  late final SmsRepository _repo = context.read<SmsRepository>();
+
+  /// What is in the composer now; saved as the draft when leaving.
+  String _text = '';
+  late final String? _initialText = widget.initialBody ?? _repo.prefsFor(widget.thread.address)?.draft;
 
   @override
   void initState() {
@@ -42,7 +50,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
       if (visible && messages.any((m) => !m.isMe && !m.isRead)) _markRead();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _markRead());
+    // The app can be killed in the background, so save the draft on the way out too.
+    _lifecycle = AppLifecycleListener(onHide: () => _repo.saveDraft(widget.thread.address, _text));
   }
+
+  late final AppLifecycleListener _lifecycle;
 
   Future<void> _markRead() async {
     if (_marking || !mounted) return;
@@ -56,6 +68,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   @override
   void dispose() {
+    // Keep unsent text as a draft (and clear the draft once it is sent or erased).
+    _repo.saveDraft(widget.thread.address, _text);
+    _lifecycle.dispose();
     _mmsResults?.cancel();
     _incoming?.cancel();
     _scrollController.dispose();
@@ -65,6 +80,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Future<void> _sendMessage(String text, List<String> attachments) async {
     try {
       final repo = context.read<SmsRepository>();
+      _text = '';
+      repo.saveDraft(widget.thread.address, '');
       if (attachments.isNotEmpty) {
         await repo.sendMms(widget.thread.address, text, attachments);
       } else {
@@ -114,8 +131,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final thread = widget.thread;
     final repo = context.read<SmsRepository>();
     // A saved number gets "View contact" instead of "Add to contacts".
-    final contactUri = _isPhone ? await repo.findContact(thread.address) : null;
+    final (contactUri, blocked) = await (
+      _isPhone ? repo.findContact(thread.address) : Future<String?>.value(),
+      repo.isBlocked(thread.address),
+    ).wait;
     if (!mounted) return;
+    final prefs = repo.prefsFor(thread.address);
+    final muted = prefs?.muted ?? false;
+    final spam = prefs?.spam ?? false;
     showExpressiveSheet<void>(
       context,
       builder: (ctx) => Padding(
@@ -175,10 +198,58 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       showExpressiveSnack(context, 'Number copied');
                     },
                   ),
+                  const SettingsDivider(),
+                  SheetActionRow(
+                    icon: Icons.share_outlined,
+                    title: 'Share contact',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      final named = thread.senderName.trim().isNotEmpty && thread.senderName != thread.address;
+                      SharePlus.instance.share(
+                        ShareParams(text: named ? '${thread.senderName}\n${thread.address}' : thread.address),
+                      );
+                    },
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
             ],
+            SheetGroup(
+              children: [
+                SheetActionRow(
+                  icon: muted ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
+                  title: muted ? 'Unmute' : 'Mute',
+                  subtitle: muted ? null : 'No notifications from this conversation',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setThreadsMuted(context, [thread.address], !muted);
+                  },
+                ),
+                const SettingsDivider(),
+                SheetActionRow(
+                  icon: spam ? Icons.report_off_outlined : Icons.report_outlined,
+                  title: spam ? 'Not spam' : 'Report spam',
+                  subtitle: spam ? 'Move back to your inbox' : 'Move to Spam and stop notifications',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setThreadsSpam(context, [thread.address], !spam);
+                    if (!spam) Navigator.pop(context);
+                  },
+                ),
+                const SettingsDivider(),
+                SheetActionRow(
+                  icon: blocked ? Icons.check_circle_outline_rounded : Icons.block_rounded,
+                  title: blocked ? 'Unblock' : 'Block',
+                  subtitle: blocked ? 'Receive messages and calls again' : 'No more messages or calls from this sender',
+                  destructive: !blocked,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    blocked ? _unblock() : _block();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             BigActionButton(
               text: 'Delete conversation',
               icon: Icons.delete_outline_rounded,
@@ -202,6 +273,43 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _block() async {
+    final thread = widget.thread;
+    final repo = context.read<SmsRepository>();
+    if (!await repo.canBlockNumbers()) {
+      if (mounted) showExpressiveSnack(context, 'Set Messages as the default SMS app to block numbers');
+      return;
+    }
+    if (!mounted) return;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Block ${thread.senderName}?',
+      message:
+          'You won’t get messages or calls from this number, and the conversation leaves your inbox. '
+          'Unblock it any time from Settings.',
+      confirmLabel: 'Block',
+      icon: Icons.block_rounded,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await repo.blockNumber(thread.address);
+      if (!mounted) return;
+      showExpressiveSnack(context, '${thread.senderName} blocked');
+      Navigator.pop(context);
+    } catch (_) {
+      if (mounted) showExpressiveSnack(context, 'Couldn’t block this number');
+    }
+  }
+
+  Future<void> _unblock() async {
+    try {
+      await context.read<SmsRepository>().unblockNumber(widget.thread.address);
+      if (mounted) showExpressiveSnack(context, '${widget.thread.senderName} unblocked');
+    } catch (_) {
+      if (mounted) showExpressiveSnack(context, 'Couldn’t unblock this number');
+    }
   }
 
   @override
@@ -282,6 +390,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 }
 
                 final messagesList = snapshot.data ?? [];
+                final lastSentIndex = messagesList.indexWhere((m) => m.isMe);
 
                 // Build list items with date separators
                 // messagesList is reverse-sorted (newest first, for reverse ListView)
@@ -343,13 +452,26 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       media: message.media,
                       pending: message.pending,
                       failed: message.failed,
+                      // Only under the newest outgoing message, as other apps do.
+                      delivered: message.delivered && msgIndex == lastSentIndex,
+                      scamWarning:
+                          !message.isMe &&
+                          ScamDetector.isSuspicious(
+                            message.body,
+                            message.threadAddress,
+                            knownContact: thread.senderName != thread.address,
+                          ),
                     );
                   },
                 );
               },
             ),
           ),
-          Composer(onSend: _sendMessage, initialText: widget.initialBody),
+          Composer(
+            onSend: _sendMessage,
+            initialText: _initialText,
+            onChanged: (text) => _text = text,
+          ),
         ],
       ),
     );

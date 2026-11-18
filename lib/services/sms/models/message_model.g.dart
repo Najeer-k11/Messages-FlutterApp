@@ -18,23 +18,28 @@ const MessageModelSchema = CollectionSchema(
   id: -902762555029995869,
   properties: {
     r'body': PropertySchema(id: 0, name: r'body', type: IsarType.string),
-    r'failed': PropertySchema(id: 1, name: r'failed', type: IsarType.bool),
-    r'isMe': PropertySchema(id: 2, name: r'isMe', type: IsarType.bool),
-    r'isRead': PropertySchema(id: 3, name: r'isRead', type: IsarType.bool),
-    r'media': PropertySchema(id: 4, name: r'media', type: IsarType.stringList),
+    r'delivered': PropertySchema(
+      id: 1,
+      name: r'delivered',
+      type: IsarType.bool,
+    ),
+    r'failed': PropertySchema(id: 2, name: r'failed', type: IsarType.bool),
+    r'isMe': PropertySchema(id: 3, name: r'isMe', type: IsarType.bool),
+    r'isRead': PropertySchema(id: 4, name: r'isRead', type: IsarType.bool),
+    r'media': PropertySchema(id: 5, name: r'media', type: IsarType.stringList),
     r'nativeMessageId': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'nativeMessageId',
       type: IsarType.string,
     ),
-    r'pending': PropertySchema(id: 6, name: r'pending', type: IsarType.bool),
+    r'pending': PropertySchema(id: 7, name: r'pending', type: IsarType.bool),
     r'threadAddress': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'threadAddress',
       type: IsarType.string,
     ),
     r'timestamp': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
@@ -108,14 +113,15 @@ void _messageModelSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.body);
-  writer.writeBool(offsets[1], object.failed);
-  writer.writeBool(offsets[2], object.isMe);
-  writer.writeBool(offsets[3], object.isRead);
-  writer.writeStringList(offsets[4], object.media);
-  writer.writeString(offsets[5], object.nativeMessageId);
-  writer.writeBool(offsets[6], object.pending);
-  writer.writeString(offsets[7], object.threadAddress);
-  writer.writeDateTime(offsets[8], object.timestamp);
+  writer.writeBool(offsets[1], object.delivered);
+  writer.writeBool(offsets[2], object.failed);
+  writer.writeBool(offsets[3], object.isMe);
+  writer.writeBool(offsets[4], object.isRead);
+  writer.writeStringList(offsets[5], object.media);
+  writer.writeString(offsets[6], object.nativeMessageId);
+  writer.writeBool(offsets[7], object.pending);
+  writer.writeString(offsets[8], object.threadAddress);
+  writer.writeDateTime(offsets[9], object.timestamp);
 }
 
 MessageModel _messageModelDeserialize(
@@ -126,15 +132,16 @@ MessageModel _messageModelDeserialize(
 ) {
   final object = MessageModel();
   object.body = reader.readString(offsets[0]);
-  object.failed = reader.readBool(offsets[1]);
+  object.delivered = reader.readBool(offsets[1]);
+  object.failed = reader.readBool(offsets[2]);
   object.id = id;
-  object.isMe = reader.readBool(offsets[2]);
-  object.isRead = reader.readBool(offsets[3]);
-  object.media = reader.readStringList(offsets[4]) ?? [];
-  object.nativeMessageId = reader.readString(offsets[5]);
-  object.pending = reader.readBool(offsets[6]);
-  object.threadAddress = reader.readString(offsets[7]);
-  object.timestamp = reader.readDateTime(offsets[8]);
+  object.isMe = reader.readBool(offsets[3]);
+  object.isRead = reader.readBool(offsets[4]);
+  object.media = reader.readStringList(offsets[5]) ?? [];
+  object.nativeMessageId = reader.readString(offsets[6]);
+  object.pending = reader.readBool(offsets[7]);
+  object.threadAddress = reader.readString(offsets[8]);
+  object.timestamp = reader.readDateTime(offsets[9]);
   return object;
 }
 
@@ -154,14 +161,16 @@ P _messageModelDeserializeProp<P>(
     case 3:
       return (reader.readBool(offset)) as P;
     case 4:
-      return (reader.readStringList(offset) ?? []) as P;
-    case 5:
-      return (reader.readString(offset)) as P;
-    case 6:
       return (reader.readBool(offset)) as P;
-    case 7:
+    case 5:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 6:
       return (reader.readString(offset)) as P;
+    case 7:
+      return (reader.readBool(offset)) as P;
     case 8:
+      return (reader.readString(offset)) as P;
+    case 9:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -582,6 +591,15 @@ extension MessageModelQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(
         FilterCondition.greaterThan(property: r'body', value: ''),
+      );
+    });
+  }
+
+  QueryBuilder<MessageModel, MessageModel, QAfterFilterCondition>
+  deliveredEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'delivered', value: value),
       );
     });
   }
@@ -1236,6 +1254,18 @@ extension MessageModelQuerySortBy
     });
   }
 
+  QueryBuilder<MessageModel, MessageModel, QAfterSortBy> sortByDelivered() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'delivered', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MessageModel, MessageModel, QAfterSortBy> sortByDeliveredDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'delivered', Sort.desc);
+    });
+  }
+
   QueryBuilder<MessageModel, MessageModel, QAfterSortBy> sortByFailed() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'failed', Sort.asc);
@@ -1335,6 +1365,18 @@ extension MessageModelQuerySortThenBy
   QueryBuilder<MessageModel, MessageModel, QAfterSortBy> thenByBodyDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'body', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MessageModel, MessageModel, QAfterSortBy> thenByDelivered() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'delivered', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MessageModel, MessageModel, QAfterSortBy> thenByDeliveredDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'delivered', Sort.desc);
     });
   }
 
@@ -1448,6 +1490,12 @@ extension MessageModelQueryWhereDistinct
     });
   }
 
+  QueryBuilder<MessageModel, MessageModel, QDistinct> distinctByDelivered() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'delivered');
+    });
+  }
+
   QueryBuilder<MessageModel, MessageModel, QDistinct> distinctByFailed() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'failed');
@@ -1517,6 +1565,12 @@ extension MessageModelQueryProperty
   QueryBuilder<MessageModel, String, QQueryOperations> bodyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'body');
+    });
+  }
+
+  QueryBuilder<MessageModel, bool, QQueryOperations> deliveredProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'delivered');
     });
   }
 

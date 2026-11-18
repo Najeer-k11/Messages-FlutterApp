@@ -91,7 +91,9 @@ class MmsStatusReceiver : BroadcastReceiver() {
 
         val text = media.firstOrNull { it.isText }?.let { String(it.data, Charsets.UTF_8) }
         val preview = text?.takeIf { it.isNotBlank() } ?: "Photo"
-        SmsReceiver().showNotification(context, from, preview)
+        // Stored either way (the MMSC needs its ack), but a blocked sender never notifies and
+        // the inbox sync hides it.
+        if (!BlockedNumbers.isBlocked(context, from)) SmsReceiver().showNotification(context, from, preview)
 
         transactionId?.let { acknowledge(context, it) }
     }

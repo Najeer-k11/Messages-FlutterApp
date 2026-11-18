@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:msgs/services/sms/repository/sms_repository.dart';
 import 'package:msgs/ui/ui.dart';
+import 'package:msgs/features/settings/blocked_numbers_screen.dart';
 
 /// Settings slides in from the right (420ms in, 320ms out, FastOutSlowIn).
 Route<void> settingsRoute() => PageRouteBuilder<void>(
@@ -29,6 +30,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   late Future<bool> _isDefault = context.read<SmsRepository>().isDefaultSmsApp();
   final Future<PackageInfo> _info = PackageInfo.fromPlatform();
+  late Future<bool> _deliveryReports = context.read<SmsRepository>().deliveryReportsEnabled();
 
   @override
   void initState() {
@@ -120,6 +122,30 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                           onTap: () => context.read<SmsRepository>().requestDefaultSmsApp(),
                         );
                       },
+                    ),
+                    const SettingsDivider(),
+                    FutureBuilder<bool>(
+                      future: _deliveryReports,
+                      builder: (context, snap) => SettingsSwitchRow(
+                        icon: Icons.done_all_rounded,
+                        title: 'Delivery reports',
+                        subtitle: 'Show “Delivered” when a text reaches the other phone',
+                        value: snap.data ?? true,
+                        onChanged: (v) async {
+                          await context.read<SmsRepository>().setDeliveryReports(v);
+                          if (mounted) setState(() => _deliveryReports = Future.value(v));
+                        },
+                      ),
+                    ),
+                    const SettingsDivider(),
+                    SettingsNavigateRow(
+                      icon: Icons.block_rounded,
+                      title: 'Blocked numbers',
+                      subtitle: 'Senders you won’t hear from',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(builder: (_) => const BlockedNumbersScreen()),
+                      ),
                     ),
                     const SettingsDivider(),
                     SettingsNavigateRow(

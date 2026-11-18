@@ -12,6 +12,7 @@ import 'package:msgs/features/permissions/permission_screen.dart';
 import 'package:msgs/services/sms/models/message_model.dart';
 import 'package:msgs/services/sms/models/read_state_model.dart';
 import 'package:msgs/services/sms/models/thread_model.dart';
+import 'package:msgs/services/sms/models/thread_prefs_model.dart';
 import 'package:msgs/services/sms/repository/sms_repository.dart';
 import 'package:msgs/services/wallpaper/wallpaper_colors.dart';
 import 'package:msgs/ui/ui.dart';
@@ -22,7 +23,7 @@ void main() async {
   _registerLicenses();
 
   final dir = await getApplicationDocumentsDirectory();
-  final isar = await Isar.open([ThreadModelSchema, MessageModelSchema, ReadStateModelSchema], directory: dir.path);
+  final isar = await Isar.open([ThreadModelSchema, MessageModelSchema, ReadStateModelSchema, ThreadPrefsModelSchema], directory: dir.path);
 
   final smsRepository = SmsRepository(isar: isar);
   final (themeSettings, wallpaper) = await (ThemeSettingsNotifier.create(), WallpaperColorsNotifier.create()).wait;

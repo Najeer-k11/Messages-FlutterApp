@@ -19,6 +19,12 @@ class MessageBubble extends StatefulWidget {
   final bool pending;
   final bool failed;
 
+  /// Show "Delivered" under the bubble.
+  final bool delivered;
+
+  /// Looks like a scam: show a warning and confirm before opening its links.
+  final bool scamWarning;
+
   const MessageBubble({
     super.key,
     required this.messageText,
@@ -29,6 +35,8 @@ class MessageBubble extends StatefulWidget {
     this.media = const [],
     this.pending = false,
     this.failed = false,
+    this.delivered = false,
+    this.scamWarning = false,
   });
 
   @override
@@ -110,6 +118,18 @@ class _MessageBubbleState extends State<MessageBubble> {
           icon: Icons.open_in_new_rounded,
           title: 'Open link',
           onTap: () async {
+            if (widget.scamWarning) {
+              final go = await showConfirmDialog(
+                context,
+                title: 'Open this link?',
+                message:
+                    'This message looks like a scam. Links like this often lead to fake bank or delivery '
+                    'pages that steal passwords and codes.',
+                confirmLabel: 'Open anyway',
+                icon: Icons.gpp_maybe_outlined,
+              );
+              if (!go) return;
+            }
             final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
             try {
               await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -380,6 +400,40 @@ class _MessageBubbleState extends State<MessageBubble> {
                       children: spans,
                       style: widget.failed ? textStyle.copyWith(color: theme.colorScheme.onErrorContainer) : textStyle,
                     ),
+                  ),
+                ),
+              if (widget.scamWarning)
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+                  decoration: ShapeDecoration(shape: Shapes.chip, color: theme.colorScheme.errorContainer),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.gpp_maybe_outlined, size: 18, color: theme.colorScheme.onErrorContainer),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Possible scam. Don’t open links or share codes.',
+                          style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onErrorContainer),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (widget.delivered && !widget.pending && !widget.failed)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, left: 6, right: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.done_all_rounded, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Delivered',
+                        style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ],
                   ),
                 ),
               if (widget.pending || widget.failed)

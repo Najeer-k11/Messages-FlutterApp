@@ -39,14 +39,36 @@ sends your messages anywhere.
 ## Features
 
 **Messaging**
-- Full SMS client that can be set as the default SMS app, with conversation history, read state,
-  swipe-to-delete and multi-select.
+- Full SMS client that can be set as the default SMS app, with conversation history, read state
+  and multi-select.
 - MMS: attach up to three photos from the system photo picker. Images are compressed to your
   carrier's size limit. Incoming MMS are downloaded and stored when Messages is the default app.
-- Delivery state on every outgoing message ("Sending", "Not sent").
+- Attach a contact from the system contact picker; it is sent as a plain-text name and number,
+  which every phone can read.
+- Drafts: unsent text is kept per conversation and shown as "Draft" in the inbox.
+- Delivery state on outgoing messages ("Sending", "Not sent", "Delivered"). Delivery reports can
+  be turned off in Settings.
 - Notifications with inline quick reply and a one-tap "Copy OTP" action. A conversation's
   notification clears when you read it.
 - Search across sender names, numbers and every message body.
+
+**Organising conversations**
+- **Pin** conversations to the top of the inbox.
+- **Archive** conversations to hide them without deleting; a new message brings one back unless
+  it is muted.
+- **Mute** a conversation to stop its notifications.
+- **Swipe actions:** swipe right to archive, swipe left to delete.
+- Archived and Spam folders, reached from the button next to Settings.
+
+**Safety**
+- **Block numbers** using Android's system block list, shared with the Phone app, so blocked
+  senders can't text or call. Blocked conversations leave the inbox and come back if you
+  unblock. Manage the list in Settings → Blocked numbers.
+- **Report spam** to move a conversation to the Spam folder, where it never notifies.
+- **Scam warnings:** messages with phishing-style links (throwaway domains, IP addresses,
+  look-alike domains) or fake KYC, parcel and prize texts with links from unknown numbers are
+  flagged, and opening their links asks for confirmation. Saved contacts are never flagged.
+- **Share contact:** send a conversation's name and number to another app.
 
 **Smart inbox (all on-device)**
 - **Codes:** active one-time passwords appear at the top of the inbox with the service name and
@@ -90,7 +112,7 @@ graph TD
 
     subgraph Services [lib/services]
         SmsRepo[SmsRepository]
-        Classifier[MessageClassifier / OtpParser]
+        Classifier[MessageClassifier / OtpParser / ScamDetector]
         Wallpaper[Wallpaper colours]
         Isar[(Isar local DB)]
     end
@@ -103,6 +125,7 @@ graph TD
         Provider[SMS/MMS provider sync]
         Mms[MMS PDU encode/decode, send, download]
         Receivers[SMS/MMS receivers, notifications]
+        Block[Block list, muted conversations]
         Colors[Material You colours]
     end
 ```
@@ -114,7 +137,7 @@ graph TD
 - `lib/services/`: the SMS repository, Isar models, message classification and wallpaper colours.
 - `android/app/src/main/kotlin/`: SMS/MMS provider access, the MMS encoder and decoder,
   broadcast receivers and the Material You colour reader.
-- `test/`: unit tests for the parsers and colour-scheme building.
+- `test/`: unit tests for the parsers, scam detection and colour-scheme building.
 
 ---
 
@@ -124,7 +147,7 @@ graph TD
 - **State management:** [flutter_bloc](https://pub.dev/packages/flutter_bloc) and [provider](https://pub.dev/packages/provider)
 - **Local database:** [Isar Community](https://pub.dev/packages/isar_community)
 - **Colour:** [material_color_utilities](https://pub.dev/packages/material_color_utilities) with a native Material You bridge
-- **Android build:** Gradle 9.5, Android Gradle Plugin 9.3, Kotlin 2.4, JDK 17
+- **Android build:** Gradle 9.5, Android Gradle Plugin 9.3, Kotlin 2.4, JDK 21 (targets Java 17)
 
 ---
 
@@ -132,7 +155,7 @@ graph TD
 
 ### Prerequisites
 - Flutter SDK 3.50 or newer
-- JDK 17 or newer
+- JDK 21 or newer (Android lint fails on JDK 17)
 - Android SDK, and an Android device or emulator
 
 ### Install and run
@@ -177,7 +200,9 @@ or financial detail leaves it.
 - **Contacts:** show contact names instead of numbers, and pick recipients.
 - **Notifications:** alert you to new messages, with quick reply and code copying.
 - **Default SMS app (optional):** needed to receive messages in the background, store sent and
-  received MMS, delete messages and keep read state in sync with the system.
+  received MMS, delete messages, block numbers and keep read state in sync with the system.
+
+Scam detection, spam reports, mutes, pins and drafts are all stored on the device.
 
 Photos are chosen through the system photo picker, so the app never needs storage access.
 
